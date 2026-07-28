@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { InventoryPage, stockQuery, suppliersQuery } from "@/features/inventory";
+import {
+  InventoryPage,
+  stockQuery,
+  suppliersQuery,
+} from "@/features/inventory";
 import { productsQuery } from "@/features/products";
 
 export const Route = createFileRoute("/_authed/inventory/")({

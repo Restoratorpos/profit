@@ -31,7 +31,6 @@ const NOT_YET_PORTED = new Set([
   "devices.tsx",
   // The dashboard renders nothing by design in apps/app too — not pending.
   "index.tsx",
-  "workers.tsx",
 ]);
 
 const routeFiles = readdirSync(routesDir).filter((name) =>
