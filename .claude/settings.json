@@ -1,0 +1,96 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm --filter:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm check)",
+      "Bash(pnpm fix)",
+      "Bash(pnpm dlx ultracite:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx biome:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx turbo:*)",
+      "Bash(npx next:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(curl:*)",
+      "Bash(lsof:*)",
+      "Bash(netstat:*)",
+      "Bash(npm view:*)",
+      "WebFetch(domain:hono.dev)",
+      "WebFetch(domain:orm.drizzle.team)",
+      "WebFetch(domain:authjs.dev)",
+      "WebFetch(domain:nextjs.org)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebSearch"
+    ],
+    "deny": [
+      "Read(./secrets/**)",
+      "Read(./**/secrets/**)",
+      "Write(./secrets/**)",
+      "Write(./**/secrets/**)",
+      "Read(./**/*.key)",
+      "Read(./**/*pem*)",
+      "Read(./**/*p12*)",
+      "Read(./**/*.credentials.json)",
+      "Read(./**/credentials.json)",
+      "Write(./**/*.key)",
+      "Write(./**/*pem*)",
+      "Write(./**/*p12*)",
+      "Write(./**/*.credentials.json)",
+      "Write(./**/credentials.json)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-context.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/scripts/validate-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-edit-lint.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/verify-before-stop.sh",
+            "timeout": 60000
+          }
+        ]
+      }
+    ]
+  },
+  "mcpServers": {}
+}

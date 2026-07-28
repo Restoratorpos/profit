@@ -1,0 +1,48 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:app"],
+      "port": 3100
+    },
+    {
+      "name": "success",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:success"],
+      "port": 3004
+    },
+    {
+      "name": "storybook",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["storybook"],
+      "port": 6006
+    },
+    {
+      "name": "email",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:email"],
+      "port": 3003
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:api"],
+      "port": 3002
+    },
+    {
+      "name": "desktop",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:desktop"],
+      "port": 3006
+    },
+    {
+      "name": "graph-sandbox",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199"],
+      "port": 5199,
+      "cwd": "apps/graph-sandbox"
+    }
+  ]
+}
