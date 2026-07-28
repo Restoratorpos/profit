@@ -15,7 +15,8 @@ const envSchema = z.object({
     .default("info"),
 
   // MySQL, as discrete parts rather than a URL — a DSN would need the password
-  // percent-encoded, and a password containing an @ would silently truncate at the '@'.
+  // percent-encoded, and any password containing an '@' would silently
+  // truncate there. (This comment used to name the real one.)
   DB_HOST: z.string().min(1),
   DB_PORT: z.coerce.number().int().positive().default(3306),
   DB_USER: z.string().min(1),
