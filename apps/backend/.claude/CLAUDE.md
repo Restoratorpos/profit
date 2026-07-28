@@ -27,7 +27,7 @@
 | `src/schemas/` | Zod request schemas. Source of truth for input shape. |
 | `src/db/` | Drizzle pool + `schema.ts` table definitions. |
 | `src/lib/` | Cross-cutting primitives: `errors`, `jwt`, `password`, `phone`, `redis`. |
-| `src/middleware/` | `auth` (`requireAuth`), `error-handler`, `request-context`. |
+| `src/middleware/` | `caller` (`requireCaller` — the door every feature route uses), `auth` (`requireAuth`), `service` (`requireService`, being retired), `login-rate-limit`, `error-handler`, `request-context`. |
 | `drizzle/` | Generated SQL migrations. Forward-only. |
 
 ## Invariants
@@ -46,6 +46,11 @@
 - **Errors go through `AppError`.** Throw a subclass from `lib/errors.ts`; the
   error handler renders it. Anything else is a bug and flattens to a 500 with no
   internals leaked.
+- **Feature routes mount `requireCaller`, not `requireService`.** It accepts a
+  per-user bearer token *or* the legacy shared token and sets the same
+  `gymId`/`workerId` either way, so handlers cannot tell the difference. Under a
+  bearer token `x-gym-id` is never read — the tenant is a signed claim. See
+  `contracts/api-contract.md`.
 - **ESM import specifiers carry `.js`** (`from "../db/index.js"`), even for
   TypeScript sources. `NodeNext` requires it.
 - **`lib/phone.ts` must stay byte-identical to `packages/auth/lib/phone.ts`.**

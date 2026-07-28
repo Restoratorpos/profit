@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   createHallSchema,
   createPlanSchema,
@@ -21,7 +21,7 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 export const planRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listPlans(c.get("gymId"))))
   .post("/", zValidator("json", createPlanSchema), async (c) => {
     const plan = await createPlan(c.get("gymId"), c.req.valid("json"));
@@ -60,7 +60,7 @@ export const planRoutes = new Hono<AppEnv>()
   });
 
 export const hallRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listHalls(c.get("gymId"))))
   .post("/", zValidator("json", createHallSchema), async (c) => {
     const hall = await createHall(c.get("gymId"), c.req.valid("json"));
@@ -69,5 +69,5 @@ export const hallRoutes = new Hono<AppEnv>()
   });
 
 export const trainerRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listTrainers(c.get("gymId"))));

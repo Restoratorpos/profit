@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   createExpenseSchema,
   createIncomeSchema,
@@ -23,7 +23,7 @@ import type { AppEnv } from "../types/index.js";
  * landed — and it saves the client a second round trip to find out.
  */
 export const transactionRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", zValidator("query", transactionQuerySchema), async (c) =>
     c.json(await loadTransactionPage(c.get("gymId"), c.req.valid("query")))
   )

@@ -23,11 +23,45 @@ What each result should be:
 
 | Case | Expected |
 |---|---|
-| `/auth/verify` correct | `200` `{ id, phone, name }` |
+| `/auth/verify` correct | `200` `{ id, phone, name, role, gymId, branchId }` |
 | `/auth/verify` wrong password | `401` `{ error: { code: "invalid_credentials" } }` |
 | `/auth/register` duplicate phone | `409` conflict |
 | `/auth/refresh` with an **access** token | `401` — the secrets are split; an access token must never work as a refresh token |
+| `/auth/refresh` replaying an already-refreshed token | `401` — refresh tokens rotate and the old one is spent |
+| `/auth/logout` with any input, valid or garbage | `204` — never an oracle for which tokens are real |
 | `/auth/me` without a bearer token | `401` |
+| 11 failed `/auth/login` for one phone | `429` with `details.retryAfter` |
+
+### The two front doors
+
+Feature routes accept a per-user bearer token *or* the legacy service token.
+Both must behave, and the tenant must come from the right place:
+
+```bash
+# browser-style: the tenant is a signed claim
+token=$(curl -s -X POST localhost:7090/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"998907661770","password":"1111"}' \
+  | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+
+curl -s localhost:7090/categories -H "Authorization: Bearer $token"
+
+# the same request with a hostile tenant header — must be IGNORED, not honoured
+curl -s localhost:7090/categories \
+  -H "Authorization: Bearer $token" -H "x-gym-id: someone-elses-gym"
+```
+
+| Case | Expected |
+|---|---|
+| feature route, valid bearer token | `200`, scoped to the token's `gymId` |
+| feature route, valid bearer **+ hostile `x-gym-id`** | `200`, still the token's gym — the header is inert |
+| feature route, **invalid** bearer + valid `x-service-token` | `401` — a bad token must not fall back to service trust |
+| feature route, `x-service-token` + `x-gym-id` | `200` (works until Phase 5 deletes `apps/app`) |
+| feature route, no credentials at all | `401` |
+
+These are covered offline by `apps/backend/__tests__/caller-auth.test.ts`, which
+needs no server and no database — run that first; the curl matrix only adds
+confidence that real credentials and a real DB behave the same.
 
 ## Verifying web auth end to end
 

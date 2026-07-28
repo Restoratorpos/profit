@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { config } from "../config/index.js";
 import type { AuthUser, UserRole } from "../types/index.js";
@@ -13,6 +14,14 @@ type AccessTokenClaims = {
 
 type RefreshTokenClaims = {
   sub: string;
+  /** Seconds since the epoch, as JWT spec'd. Set by `expiresIn`. */
+  exp: number;
+};
+
+export type RefreshTokenPayload = {
+  userId: string;
+  /** When this token stops being valid — the denylist entry expires with it. */
+  expiresAt: Date;
 };
 
 export type TokenPair = {
@@ -40,9 +49,18 @@ export const signAccessToken = (user: AuthUser): string =>
     }
   );
 
-/** Carries only the subject: it is a key to mint access tokens, not an identity. */
+/**
+ * Carries only the subject and a unique id: it is a key to mint access tokens,
+ * not an identity.
+ *
+ * The `jti` is what makes rotation work. Without it the payload is just
+ * `{ sub, iat, exp }`, and `iat`/`exp` are whole seconds — so refreshing twice
+ * inside one second produced a byte-identical token. Since rotation revokes the
+ * token it was handed, the "new" token came back already denylisted and the
+ * next refresh signed the user out.
+ */
 export const signRefreshToken = (userId: string): string =>
-  jwt.sign({}, config.auth.refreshSecret, {
+  jwt.sign({ jti: randomUUID() }, config.auth.refreshSecret, {
     subject: userId,
     expiresIn: config.auth.refreshTtl as SignOptions["expiresIn"],
   });
@@ -73,8 +91,15 @@ export const verifyAccessToken = (token: string): AuthUser | null => {
   }
 };
 
-/** Returns the user id the refresh token was issued for, or null. */
-export const verifyRefreshToken = (token: string): string | null => {
+/**
+ * Returns who the refresh token was issued for and when it lapses, or null.
+ *
+ * The expiry is part of the result because revoking a refresh token means
+ * remembering it until it would have expired anyway — see lib/token-denylist.ts.
+ */
+export const verifyRefreshToken = (
+  token: string
+): RefreshTokenPayload | null => {
   try {
     const claims = jwt.verify(
       token,
@@ -83,7 +108,10 @@ export const verifyRefreshToken = (token: string): string | null => {
       config.auth.refreshSecret
     ) as RefreshTokenClaims;
 
-    return claims.sub;
+    return {
+      userId: claims.sub,
+      expiresAt: new Date(claims.exp * 1000),
+    };
   } catch {
     return null;
   }

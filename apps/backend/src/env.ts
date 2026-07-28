@@ -31,6 +31,12 @@ const envSchema = z.object({
 
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
 
+  // Failed sign-ins tolerated per phone number per window. Ten is well clear of
+  // an operator mistyping a password on a touchscreen, and far below what
+  // guessing one needs.
+  LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+
   // Shared with apps/app, which calls this API server-to-server on behalf of a
   // signed-in user. Optional so the server still boots without it; the routes
   // that need it refuse to serve until it is set (see middleware/service.ts).

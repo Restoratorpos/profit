@@ -59,17 +59,43 @@ are never leaked to the client.
 
 | Route | Purpose | Success |
 | --- | --- | --- |
-| `POST /auth/register` | Create an account | `201 { user, token }` |
-| `POST /auth/login` | Token login (mobile/API clients) | `200 { user, token }` |
-| `POST /auth/verify` | **Web login.** Server-to-server credential check | `200 { id, phone, name }` |
+| `POST /auth/register` | Onboard a tenant (gym + branch + owner) | `201 { user, accessToken, refreshToken }` |
+| `POST /auth/login` | Token login (apps/web, mobile, API clients) | `200 { user, accessToken, refreshToken }` |
+| `POST /auth/refresh` | Rotate a refresh token | `200 { user, accessToken, refreshToken }` |
+| `POST /auth/logout` | Revoke a refresh token | `204`, always |
+| `POST /auth/verify` | **Web login.** Server-to-server credential check | `200 { id, phone, name, role, gymId, branchId }` |
 | `GET /auth/me` | Current user, behind `requireAuth` | `200 { user }` |
+
+`POST /auth/login` is throttled per phone number — **429** with
+`details.retryAfter` in seconds once the window is exhausted. The counter is
+cleared by a successful sign-in, so fumbling a password costs nothing once you
+get it right.
+
+### Refresh tokens rotate, and rotation is enforced
+
+`/auth/refresh` **spends** the token it is given: the presented token is revoked
+and a new pair issued. Replaying an already-refreshed token is a 401, which is
+what makes a stolen refresh token detectable rather than a silent second
+session.
+
+Two consequences worth knowing:
+
+- Refresh tokens carry a `jti`. Without it the payload is only
+  `{ sub, iat, exp }` at one-second resolution, so two refreshes in the same
+  second produced a **byte-identical** token — one that rotation had just
+  revoked.
+- A revoked token and a forged one return the identical 401 body. Do not add a
+  distinguishing message; it would be an oracle for guessing valid tokens.
+
+`/auth/logout` answers `204` for every input, including garbage, for the same
+reason.
 
 ### `/auth/verify` is load-bearing — do not change its shape
 
 `packages/auth` (Auth.js credentials provider) calls this from the Next.js
 server on every web sign-in. It mints its **own** session JWT, so this endpoint
-deliberately issues **no token**. It returns a bare `{ id, phone, name }` on
-success and **401** on bad credentials.
+deliberately issues **no token**. It returns the safe user shape on success and
+**401** on bad credentials.
 
 Auth.js maps that 401 to "invalid credentials" and anything else to a thrown
 error. So:
@@ -97,10 +123,36 @@ governs *browser* callers. `/auth/verify` and `/auth/register` arrive
 server-to-server from Next.js and are unaffected by it — do not "fix" a login
 failure by loosening CORS.
 
+## Who May Call a Feature Route
+
+Every feature router mounts **`requireCaller`** (`src/middleware/caller.ts`),
+which accepts either kind of caller and leaves the context identical:
+
+| Caller | Presents | `gymId` comes from |
+| --- | --- | --- |
+| `apps/web` (browser) | `Authorization: Bearer <access token>` | a **signed claim** |
+| `apps/app` (Next server) | `x-service-token` + `x-gym-id` | a **request header** |
+
+A bearer token wins when one is present, and an *invalid* bearer token is
+rejected rather than falling through to the service check — otherwise a browser
+with an expired session could be silently upgraded to service-level trust by a
+header a proxy added.
+
+Under a bearer token `x-gym-id` is **never read**. That is the whole point: the
+service door lets whoever holds `SERVICE_TOKEN` name any gym, and the bearer
+door cannot. `__tests__/caller-auth.test.ts` asserts it; if that test ever fails,
+one gym can read another's data by editing a request.
+
+`requireService` is being retired. Once `apps/app` is gone (Phase 5 of
+`MIGRATION-VITE.md`) the routes go back to plain `requireAuth`, and
+`SERVICE_TOKEN` comes out of both environments.
+
 ## Adding a Route
 
 1. Zod schema in `src/schemas/`.
 2. Service function in `src/services/` — pure logic, no `Context`.
 3. Thin handler in `src/routes/`, wired with `zValidator`.
-4. Protected? Add `requireAuth` and read the user with `c.get("user")`.
+4. Protected? Add `requireCaller` and read the tenant with `c.get("gymId")`.
+   Use `requireAuth` directly only where a *person* is required rather than a
+   tenant (`/auth/me`), since the service door has no user to offer.
 5. Test with `app.request()` in `__tests__/` — asserts the contract, needs no port.

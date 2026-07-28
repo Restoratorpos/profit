@@ -53,3 +53,14 @@ export class ConflictError extends AppError {
     super(409, "conflict", message);
   }
 }
+
+/**
+ * `retryAfter` rides in `details` rather than a Retry-After header because the
+ * error handler renders every AppError the same way; a header would be a
+ * special case in the one place that must stay uniform.
+ */
+export class TooManyRequestsError extends AppError {
+  constructor(message = "Too many requests", retryAfter?: number) {
+    super(429, "too_many_requests", message, { retryAfter });
+  }
+}

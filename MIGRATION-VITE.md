@@ -5,10 +5,10 @@ Written 2026-07-28.
 | Phase | Status |
 |---|---|
 | 0 — git | **done** (`95c06ec`) |
-| 1 — backend `requireUser` | not started |
+| 1 — backend per-user auth | **done** — shipped as `requireCaller` |
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
-| 3 — SPA auth | not started |
-| 4 — 9 feature verticals | not started (blocked on Phase 1) |
+| 3 — SPA auth | not started — **unblocked** |
+| 4 — 9 feature verticals | not started — **unblocked** |
 | 5 — cutover, delete `apps/app` | not started |
 
 ## The headline
@@ -148,6 +148,23 @@ Do not start a migration of this size without version control. `git init` and an
 initial commit is the first task, full stop.
 
 ### Phase 1 — Backend: per-user auth (ships while Next is still live)
+
+**Done.** Shipped as `requireCaller` (`src/middleware/caller.ts`) rather than the
+`requireUser` this plan first named, because the dual-accept composite and the
+bearer path turned out to be the same middleware. `requireAuth` now sets
+`gymId`/`workerId` from the signed claims, so all ~111 `c.get("gymId")` call
+sites and every handler body were left untouched — only the ~21 middleware
+attachment points across 9 route files changed. `apps/app` still works through
+the service door, unchanged.
+
+Also landed: `POST /auth/logout`, refresh-token rotation with a Redis denylist,
+and per-phone throttling on `/auth/login`. Covered by
+`__tests__/caller-auth.test.ts` and `__tests__/token-revocation.test.ts`.
+
+One real bug surfaced while testing rotation: refresh tokens signed only
+`{ sub, iat, exp }`, and those are whole seconds — so rotating twice inside one
+second returned a **byte-identical token that had just been revoked**, signing
+the user out on their next refresh. Fixed by giving refresh tokens a `jti`.
 
 The whole risk of the project is concentrated here, and none of it touches the
 frontend.

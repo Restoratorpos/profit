@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import { setFaceSchema } from "../schemas/device.js";
 import {
   createMemberSchema,
@@ -27,7 +27,7 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 export const memberRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   /*
    * The whole roster, unfiltered. The pickers need it — a member search in
    * the order composer or the attendance sheet is over every member, not a

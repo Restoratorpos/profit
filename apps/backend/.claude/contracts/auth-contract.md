@@ -33,18 +33,34 @@ The same credentials mint two different things, and confusing them causes real
 bugs:
 
 - **Web (`apps/app`)** — Auth.js owns the session. It calls `POST /auth/verify`,
-  gets `{ id, phone, name }`, and signs its **own** JWT with `AUTH_SECRET`. The
-  token this backend can issue is **not used** on the web.
-- **API/mobile clients** — `POST /auth/login` returns this backend's JWT, signed
-  with `JWT_ACCESS_SECRET` and checked by `requireAuth`. Its access token carries
-  `gymId` and `branchId` so a request never re-derives its tenant.
+  gets the safe user shape, and signs its **own** JWT with `AUTH_SECRET`. The
+  token this backend can issue is **not used** on the Next web session.
+- **`apps/web`, API and mobile clients** — `POST /auth/login` returns this
+  backend's own pair, signed with `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` and
+  checked by `requireAuth`. The access token carries `gymId` and `branchId`, so
+  a request never re-derives its tenant and cannot be asked to assume another.
 
-**Known gap:** the web session carries only `{ id, phone, name }` — no `gymId`,
-`branchId` or `role`. Widening it means editing
-`packages/auth/lib/verify-credentials.ts`, which the `Read(./**/*credential*)`
-deny rule in `.claude/settings.json` currently blocks. Narrow that glob before
-attempting it; until then `/auth/verify`'s response shape must stay exactly
-`{ id, phone, name }`.
+`apps/app` is being replaced by `apps/web`, which uses the second of these
+directly from the browser. Until it is gone, both work — see "Who May Call a
+Feature Route" in `api-contract.md`.
+
+## Refresh Tokens
+
+- **They rotate.** `/auth/refresh` revokes the token it was handed before
+  issuing the next pair, so a replay is a 401 rather than a second live session.
+- **Revocation is a Redis denylist** (`lib/token-denylist.ts`), keyed by
+  SHA-256 of the token and expiring exactly when the token would have. Tokens
+  are never stored whole: a dump of Redis must not hand out credentials.
+- **The denylist fails open.** An unreachable Redis answers "not revoked",
+  because the alternative signs out every operator at once mid-shift. The
+  exposure is bounded — access tokens last minutes — and it matches `index.ts`
+  already treating Redis as non-fatal.
+- **Refresh tokens carry a `jti`**, and must keep doing so. Without it the
+  payload is `{ sub, iat, exp }` at one-second resolution, and two refreshes
+  inside the same second mint a byte-identical token that rotation has just
+  revoked.
+- **`refreshSession` re-reads the worker.** A refresh token outlives an access
+  token, so the account may have been renamed, moved, demoted or deactivated.
 
 `AUTH_SECRET` (web) and `JWT_ACCESS_SECRET` (API) are unrelated secrets. Neither
 side can verify the other's token, and neither should try to.

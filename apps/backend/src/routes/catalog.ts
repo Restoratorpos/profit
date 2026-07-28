@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   createCategorySchema,
   createProductSchema,
@@ -20,12 +20,14 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 /**
- * Called by apps/app server-side, never by a browser. `requireService` puts the
- * caller's tenant on the context; every handler passes it straight into the
- * service, which is where the scoping actually happens.
+ * Reachable both ways during the migration — apps/app server-side with the
+ * shared token, apps/web from the browser with a bearer token. `requireCaller`
+ * normalises the two, putting the caller's tenant on the context; every handler
+ * passes it straight into the service, which is where the scoping actually
+ * happens.
  */
 export const categoryRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listCategories(c.get("gymId"))))
   .post("/", zValidator("json", createCategorySchema), async (c) => {
     const category = await createCategory(c.get("gymId"), c.req.valid("json"));
@@ -52,7 +54,7 @@ export const categoryRoutes = new Hono<AppEnv>()
   });
 
 export const productRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listProducts(c.get("gymId"))))
   .post("/", zValidator("json", createProductSchema), async (c) => {
     const product = await createProduct(c.get("gymId"), c.req.valid("json"));

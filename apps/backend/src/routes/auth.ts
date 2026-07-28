@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth.js";
+import { loginRateLimit } from "../middleware/login-rate-limit.js";
 import {
   credentialsSchema,
   refreshSchema,
@@ -8,6 +9,7 @@ import {
 } from "../schemas/auth.js";
 import {
   login,
+  logout,
   refreshSession,
   register,
   verifyCredentials,
@@ -20,15 +22,36 @@ export const authRoutes = new Hono<AppEnv>()
 
     return c.json(session, 201);
   })
-  .post("/login", zValidator("json", credentialsSchema), async (c) => {
-    const { phone, password } = c.req.valid("json");
+  /**
+   * The throttle sits after validation on purpose: it keys on the *normalised*
+   * phone, so every spelling of the same number shares one counter.
+   */
+  .post(
+    "/login",
+    zValidator("json", credentialsSchema),
+    loginRateLimit,
+    async (c) => {
+      const { phone, password } = c.req.valid("json");
 
-    return c.json(await login(phone, password));
-  })
+      return c.json(await login(phone, password));
+    }
+  )
   .post("/refresh", zValidator("json", refreshSchema), async (c) => {
     const { refreshToken } = c.req.valid("json");
 
     return c.json(await refreshSession(refreshToken));
+  })
+  /**
+   * Revokes a refresh token. Always 204, even for a token that was already
+   * invalid — see the service for why this must not be an oracle.
+   *
+   * Takes no bearer token: signing out has to work when the access token has
+   * already expired, which is exactly when a user is most likely to try.
+   */
+  .post("/logout", zValidator("json", refreshSchema), async (c) => {
+    await logout(c.req.valid("json").refreshToken);
+
+    return c.body(null, 204);
   })
   /**
    * Called server-to-server by packages/auth (next-auth credentials provider),

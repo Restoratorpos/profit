@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import { createComboSchema, updateComboSchema } from "../schemas/combo.js";
 import {
   createCombo,
@@ -11,12 +11,13 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 /**
- * Called by apps/app server-side, never by a browser. `requireService` puts the
- * caller's tenant on the context; every handler passes it into the service,
- * which is where the gym scoping actually happens.
+ * Reachable both ways during the migration — apps/app server-side with the
+ * shared token, apps/web from the browser with a bearer token. `requireCaller`
+ * normalises the two, putting the caller's tenant on the context; every handler
+ * passes it into the service, which is where the gym scoping actually happens.
  */
 export const comboRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listCombos(c.get("gymId"))))
   .post("/", zValidator("json", createComboSchema), async (c) => {
     const combo = await createCombo(c.get("gymId"), c.req.valid("json"));

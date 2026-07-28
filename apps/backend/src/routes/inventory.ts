@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   createStockActionSchema,
   createStocktakeSchema,
@@ -24,7 +24,7 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 export const inventoryRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listStock(c.get("gymId"))))
   .get("/movements", zValidator("query", movementQuerySchema), async (c) =>
     c.json(await listMovements(c.get("gymId"), c.req.valid("query")))
@@ -54,7 +54,7 @@ export const inventoryRoutes = new Hono<AppEnv>()
   });
 
 export const supplierRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listSuppliers(c.get("gymId"))))
   .post("/", zValidator("json", createSupplierSchema), async (c) => {
     const supplier = await createSupplier(c.get("gymId"), c.req.valid("json"));

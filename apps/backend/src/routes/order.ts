@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   createOrderSchema,
   editOrderItemsSchema,
@@ -17,7 +17,7 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 export const orderRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listMemberOrderDebts(c.get("gymId"))))
   .post("/", zValidator("json", createOrderSchema), async (c) => {
     const order = await createOrder(

@@ -16,21 +16,21 @@ const matches = (a: string, b: string): boolean => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
+type ServiceCaller = {
+  gymId: string;
+  workerId: string | null;
+};
+
+/** Reads a header by name, case-insensitively — `c.req.header` satisfies this. */
+type HeaderReader = (name: string) => string | undefined;
+
 /**
- * Trusts apps/app to call on behalf of an already-authenticated user.
+ * Validates the shared-token handshake and returns who the caller claims to be.
  *
- * The web session is a next-auth cookie this API cannot verify — different
- * library, different secret — so the Next server acts as the front door: it
- * authenticates the user, then forwards the request with a shared token and the
- * caller's `gym_id`.
- *
- * The trade-off is explicit: anything holding SERVICE_TOKEN can name any gym.
- * That is acceptable while both processes are first-party and the API is not
- * publicly routable. Do not expose this API to the internet without moving to
- * per-user tokens (`requireAuth`), which bind the tenant into a signed claim
- * instead of a header.
+ * Split out from the middleware so `requireCaller` can reuse it during the
+ * migration without nesting one Hono middleware inside another.
  */
-export const requireService = createMiddleware<AppEnv>(async (c, next) => {
+export const authenticateService = (header: HeaderReader): ServiceCaller => {
   const expected = config.service.token;
 
   if (!expected) {
@@ -41,26 +41,47 @@ export const requireService = createMiddleware<AppEnv>(async (c, next) => {
     );
   }
 
-  const presented = c.req.header(SERVICE_TOKEN_HEADER);
+  const presented = header(SERVICE_TOKEN_HEADER);
 
   if (!(presented && matches(presented, expected))) {
     throw new UnauthorizedError("Invalid service token");
   }
 
-  const gymId = c.req.header(GYM_HEADER);
+  const gymId = header(GYM_HEADER);
 
   if (!gymId) {
     throw new UnauthorizedError(`Missing ${GYM_HEADER}`);
   }
-
-  c.set("gymId", gymId);
 
   /*
    * Several ProFit tables declare `created_by` NOT NULL, so writes need to know
    * who the operator is. Not required here: every read-only route would break
    * for no benefit, and the write paths that need it fail loudly on their own.
    */
-  c.set("workerId", c.req.header(WORKER_HEADER) ?? null);
+  return { gymId, workerId: header(WORKER_HEADER) ?? null };
+};
+
+/**
+ * Trusts apps/app to call on behalf of an already-authenticated user.
+ *
+ * The web session is a next-auth cookie this API cannot verify — different
+ * library, different secret — so the Next server acts as the front door: it
+ * authenticates the user, then forwards the request with a shared token and the
+ * caller's `gym_id`.
+ *
+ * The trade-off is explicit: anything holding SERVICE_TOKEN can name any gym.
+ * That is acceptable while both processes are first-party and the API is not
+ * publicly routable.
+ *
+ * **Being retired.** Routes now mount `requireCaller`, which prefers a per-user
+ * bearer token and only falls back to this. Once apps/app is gone (Phase 5 of
+ * MIGRATION-VITE.md) this middleware and SERVICE_TOKEN go with it.
+ */
+export const requireService = createMiddleware<AppEnv>(async (c, next) => {
+  const { gymId, workerId } = authenticateService(c.req.header.bind(c.req));
+
+  c.set("gymId", gymId);
+  c.set("workerId", workerId);
 
   await next();
 });

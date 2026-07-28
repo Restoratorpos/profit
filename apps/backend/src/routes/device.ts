@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { toTerminalEvent } from "../lib/hikvision.js";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import {
   attendanceQuerySchema,
   decidePendingSchema,
@@ -42,7 +42,7 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 export const deviceRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) => c.json(await listDevices(c.get("gymId"))))
   .post("/", zValidator("json", createDeviceSchema), async (c) => {
     const device = await createDevice(
@@ -188,32 +188,32 @@ export const attendanceRoutes = new Hono<AppEnv>()
     return c.json(outcome);
   })
   /*
-   * `requireService` is attached per route rather than as a `use("*")` on this
+   * `requireCaller` is attached per route rather than as a `use("*")` on this
    * router. A wildcard would also match the push URL above, and whether it ran
    * would depend on registration order — too subtle a thing to have standing
    * between a terminal and a 401 it can never satisfy.
    */
   .get(
     "/events",
-    requireService,
+    requireCaller,
     zValidator("query", recentEventsQuerySchema),
     async (c) =>
       c.json(await listRecentEvents(c.get("gymId"), c.req.valid("query").limit))
   )
-  .get("/inside", requireService, async (c) =>
+  .get("/inside", requireCaller, async (c) =>
     c.json({ count: await countOpenSessions(c.get("gymId")) })
   )
-  .get("/door", requireService, async (c) =>
+  .get("/door", requireCaller, async (c) =>
     c.json(await readDoorState(c.get("gymId")))
   )
-  .post("/unknown/remove", requireService, async (c) => {
+  .post("/unknown/remove", requireCaller, async (c) => {
     await removeUnknownFromTerminal(c.get("gymId"));
 
     return c.body(null, 204);
   })
   .post(
     "/pending/:sessionId",
-    requireService,
+    requireCaller,
     zValidator("json", decidePendingSchema),
     async (c) => {
       await decidePending(
@@ -228,7 +228,7 @@ export const attendanceRoutes = new Hono<AppEnv>()
   )
   .get(
     "/sessions",
-    requireService,
+    requireCaller,
     zValidator("query", attendanceQuerySchema),
     async (c) => {
       const query = c.req.valid("query");
@@ -246,7 +246,7 @@ export const attendanceRoutes = new Hono<AppEnv>()
   )
   .post(
     "/manual",
-    requireService,
+    requireCaller,
     zValidator("json", manualVisitSchema),
     async (c) => {
       await recordManualVisit(

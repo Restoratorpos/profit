@@ -30,11 +30,19 @@ export type AppEnv = {
     requestId: string;
     logger: Logger;
     user: AuthUser;
-    /** Set by requireService. The tenant every query in the request filters by. */
+    /**
+     * The tenant every query in the request filters by.
+     *
+     * Set by whichever middleware authenticated the caller — from a signed JWT
+     * claim under `requireAuth`, or from the `x-gym-id` header under
+     * `requireService`. Handlers deliberately cannot tell the difference, which
+     * is what lets a route move between the two without touching its body.
+     */
     gymId: string;
     /**
-     * Set by requireService from the calling app's session. Null when the
-     * caller did not name one, which only write paths care about.
+     * Who is performing the action, for the `created_by` columns. The token
+     * subject under `requireAuth`; the `x-worker-id` header under
+     * `requireService`, where it may be absent — only write paths care.
      */
     workerId: string | null;
   };

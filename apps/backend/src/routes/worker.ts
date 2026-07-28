@@ -1,6 +1,6 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { requireService } from "../middleware/service.js";
+import { requireCaller } from "../middleware/caller.js";
 import { setFaceSchema } from "../schemas/device.js";
 import {
   attendanceMarkSchema,
@@ -35,12 +35,14 @@ import {
 import type { AppEnv } from "../types/index.js";
 
 /**
- * Called by apps/app server-side, never by a browser. `requireService` puts the
- * caller's tenant and operator on the context; every handler passes them into
- * the service, which is where the gym scoping happens.
+ * Reachable both ways during the migration — apps/app server-side with the
+ * shared token, apps/web from the browser with a bearer token. `requireCaller`
+ * normalises the two, putting the caller's tenant and operator on the context;
+ * every handler passes them into the service, which is where the gym scoping
+ * happens.
  */
 export const workerRoutes = new Hono<AppEnv>()
-  .use("*", requireService)
+  .use("*", requireCaller)
   .get("/", async (c) =>
     c.json(
       await listWorkers(

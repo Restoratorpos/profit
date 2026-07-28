@@ -16,6 +16,10 @@ import {
   verifyRefreshToken,
 } from "../lib/jwt.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import {
+  denyRefreshToken,
+  isRefreshTokenDenied,
+} from "../lib/token-denylist.js";
 import type { RegisterInput } from "../schemas/auth.js";
 import type { AuthUser, UserRole } from "../types/index.js";
 
@@ -201,23 +205,60 @@ export const login = async (
  * Re-reads the worker rather than trusting the token: a refresh token outlives
  * an access token, so the account may have been renamed, moved between
  * branches, demoted, or deactivated since it was issued.
+ *
+ * The presented token is **spent** — it is revoked and a fresh pair issued.
+ * Rotation matters more now that the browser holds these directly: a stolen
+ * refresh token and the real one cannot both keep working, so a theft surfaces
+ * as the victim being signed out rather than as two silent parallel sessions.
  */
 export const refreshSession = async (
   refreshToken: string
 ): Promise<Session> => {
-  const workerId = verifyRefreshToken(refreshToken);
+  const payload = verifyRefreshToken(refreshToken);
 
-  if (!workerId) {
+  if (!payload) {
     throw new UnauthorizedError("Invalid or expired refresh token");
   }
 
-  const worker = await findWorkerById(workerId);
+  // Independent lookups: the common case is a valid, un-revoked token, so pay
+  // for one round trip rather than two.
+  const [isDenied, worker] = await Promise.all([
+    isRefreshTokenDenied(refreshToken),
+    findWorkerById(payload.userId),
+  ]);
+
+  if (isDenied) {
+    // Same message as a bad signature: which of the two it was is not the
+    // caller's business.
+    throw new UnauthorizedError("Invalid or expired refresh token");
+  }
 
   if (!worker || worker.status !== ACTIVE) {
     throw new UnauthorizedError("Account no longer exists");
   }
 
+  await denyRefreshToken(refreshToken, payload.expiresAt);
+
   const authUser = toAuthUser(worker);
 
   return { user: authUser, ...signTokenPair(authUser) };
+};
+
+/**
+ * Revokes a refresh token. Idempotent, and silent about tokens it cannot read.
+ *
+ * Signing out is a request, not a question — reporting "that token was already
+ * invalid" would turn this into an oracle for guessing which tokens are real,
+ * and there is nothing the caller could usefully do with the answer. Access
+ * tokens are not revoked: they are minutes long and stateless by design, so the
+ * client drops its copy and the rest expires on its own.
+ */
+export const logout = async (refreshToken: string): Promise<void> => {
+  const payload = verifyRefreshToken(refreshToken);
+
+  if (!payload) {
+    return;
+  }
+
+  await denyRefreshToken(refreshToken, payload.expiresAt);
 };

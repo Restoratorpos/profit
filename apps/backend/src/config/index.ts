@@ -36,5 +36,7 @@ export const config = {
     refreshSecret: env.JWT_REFRESH_SECRET,
     accessTtl: env.JWT_ACCESS_TTL,
     refreshTtl: env.JWT_REFRESH_TTL,
+    loginRateLimit: env.LOGIN_RATE_LIMIT,
+    loginRateWindowSeconds: env.LOGIN_RATE_WINDOW_SECONDS,
   },
 } as const;
