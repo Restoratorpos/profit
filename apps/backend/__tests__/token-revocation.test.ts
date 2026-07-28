@@ -12,8 +12,10 @@ import type { Worker } from "../src/db/schema.js";
 const store = vi.hoisted(() => new Map<string, string>());
 
 vi.mock("../src/lib/redis.js", () => ({
+  isRedisAvailable: () => true,
   redis: {
     isOpen: true,
+    isReady: true,
     set: (key: string, value: string) => {
       store.set(key, value);
       return Promise.resolve("OK");

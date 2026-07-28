@@ -1,5 +1,5 @@
 import { logger } from "./logger.js";
-import { redis } from "./redis.js";
+import { isRedisAvailable, redis } from "./redis.js";
 
 /**
  * A fixed-window counter, used to keep /auth/login from being a free password
@@ -44,7 +44,7 @@ export const consumeRateLimit = async (
   limit: number,
   windowSeconds: number
 ): Promise<RateLimitResult> => {
-  if (!redis.isOpen) {
+  if (!isRedisAvailable()) {
     if (!hasWarnedUnavailable) {
       hasWarnedUnavailable = true;
       logger.warn("Redis is unavailable — rate limiting is not being applied");
@@ -88,7 +88,7 @@ export const consumeRateLimit = async (
  * only that the operator keeps a smaller allowance until the window rolls over.
  */
 export const resetRateLimit = async (key: string): Promise<void> => {
-  if (!redis.isOpen) {
+  if (!isRedisAvailable()) {
     return;
   }
 

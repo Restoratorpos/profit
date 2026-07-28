@@ -38,6 +38,16 @@ const toApiError = async (response: Response): Promise<ApiError> => {
   );
 };
 
+/**
+ * Nothing the app waits on may hang indefinitely.
+ *
+ * A dev server proxying to a backend that is not listening will hold a request
+ * open rather than refuse it, and the boot sequence waits on exactly such a
+ * request. Ten seconds is far beyond a LAN round trip and far below a user's
+ * patience for a blank screen.
+ */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 const request = (path: string, init: RequestInit = {}): Promise<Response> => {
   const token = getAccessToken();
 
@@ -51,6 +61,7 @@ const request = (path: string, init: RequestInit = {}): Promise<Response> => {
     // Sends the httpOnly refresh cookie. Without this the session cannot
     // survive a reload.
     credentials: "include",
+    signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 };
 

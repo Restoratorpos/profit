@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { logger } from "./logger.js";
-import { redis } from "./redis.js";
+import { isRedisAvailable, redis } from "./redis.js";
 
 /**
  * Revocation for refresh tokens.
@@ -29,7 +29,7 @@ export const denyRefreshToken = async (
   token: string,
   expiresAt: Date
 ): Promise<void> => {
-  if (!redis.isOpen) {
+  if (!isRedisAvailable()) {
     // Loud, because this one *is* a security event: the user asked to be signed
     // out and the token remains usable until it expires on its own.
     logger.error(
@@ -56,7 +56,7 @@ export const denyRefreshToken = async (
  * attacker a stolen token plus a Redis outage at the same moment.
  */
 export const isRefreshTokenDenied = async (token: string): Promise<boolean> => {
-  if (!redis.isOpen) {
+  if (!isRedisAvailable()) {
     return false;
   }
 

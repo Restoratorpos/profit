@@ -1,4 +1,5 @@
 import { createRouter } from "@tanstack/react-router";
+import { CrashScreen, NotFound } from "@/components/boot-screen";
 import { queryClient } from "@/lib/query-client";
 import { routeTree } from "./routeTree.gen";
 
@@ -15,6 +16,13 @@ export const router = createRouter({
   // accounting; letting the router preload on intent just warms those queries.
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
+  /*
+   * Without these, a route that throws unmounts the tree and leaves a blank
+   * page — no message, no stack, nothing anyone can act on. On a terminal with
+   * no visible browser chrome that is indistinguishable from a hung app.
+   */
+  defaultErrorComponent: CrashScreen,
+  defaultNotFoundComponent: NotFound,
 });
 
 declare module "@tanstack/react-router" {

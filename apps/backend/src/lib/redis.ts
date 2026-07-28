@@ -9,6 +9,16 @@ const CONNECT_TIMEOUT_MS = 3000;
 // through pnpm's .pnpm/ paths and fails with TS2742 ("cannot be named").
 export const redis: RedisClientType = createClient({
   url: env.REDIS_URL,
+  /*
+   * Fail commands immediately while disconnected instead of queueing them.
+   *
+   * The default queues every command until the connection returns, so a caller
+   * that checked "is Redis available?" and got the wrong answer waits forever
+   * rather than erroring. Everything here is designed to degrade — the denylist
+   * fails open, the throttle fails open, readiness reports "down" — and all of
+   * that depends on the call *returning*.
+   */
+  disableOfflineQueue: true,
   socket: {
     /*
      * Exponential backoff, capped.
@@ -63,8 +73,18 @@ redis.on("ready", () => {
  * documented as non-fatal at boot while in practice preventing the API from
  * starting at all.
  */
+/**
+ * `isReady`, never `isOpen`.
+ *
+ * `isOpen` only means the client has not been closed — it stays true for the
+ * entire time a dead connection is being retried. Guarding on it is how a
+ * "Redis is unavailable, skip it" branch turns into a command that waits
+ * forever. Every caller in this codebase must use this.
+ */
+export const isRedisAvailable = (): boolean => redis.isReady;
+
 export const connectRedis = async (): Promise<void> => {
-  if (redis.isOpen) {
+  if (redis.isReady) {
     return;
   }
 
@@ -108,7 +128,7 @@ export const disconnectRedis = async (): Promise<void> => {
  * missing cache, and `probe()` in routes/health.ts can only catch a rejection.
  */
 export const pingRedis = async (): Promise<void> => {
-  if (!redis.isOpen) {
+  if (!redis.isReady) {
     throw new Error("Redis is not connected");
   }
 

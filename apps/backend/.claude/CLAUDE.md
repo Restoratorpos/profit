@@ -89,6 +89,16 @@ pnpm --filter backend db:migrate  # apply pending migrations
 
 ## Gotchas
 
+- **Never guard on `redis.isOpen` — use `isRedisAvailable()` (`redis.isReady`).**
+  `isOpen` only means the client has not been *closed*; it stays `true` for the
+  whole time a dead connection is being retried. Every "is Redis up? if not,
+  skip it" branch written against `isOpen` therefore takes the *happy* path
+  while Redis is down, and the command lands in node-redis' offline queue and
+  never resolves. This is what made **every `/auth/login` hang forever** with no
+  error: `/auth/verify` (no rate limiter) answered in 0.5s while `/auth/login`
+  (same DB, same bcrypt, plus `loginRateLimit`) timed out. The client also sets
+  `disableOfflineQueue: true` so a mistake here fails fast instead of hanging.
+
 - **A salary expense's `action_id` holds the month it settles**, as
   `salary:YYYY-MM` — not a link to another document. A wage is earned in one
   month and usually handed over in the next, and `paid_at` alone cannot tell

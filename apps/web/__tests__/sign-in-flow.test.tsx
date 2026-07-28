@@ -37,12 +37,17 @@ const renderApp = (initialPath: string) => {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider initialUser={null}>
+      <AuthProvider initialUser={null} restoreOnMount={false}>
         <RoutedApp />
       </AuthProvider>
     </QueryClientProvider>
   );
 };
+
+// Hoisted so they are compiled once rather than on every assertion.
+const PHONE_LABEL = /telefon/i;
+const PASSWORD_LABEL = /parol/i;
+const SUBMIT_LABEL = /kirish/i;
 
 let requests: string[] = [];
 
@@ -76,18 +81,18 @@ describe("sign-in", () => {
     renderApp("/sign-in");
 
     await waitFor(() =>
-      expect(screen.getByLabelText(/telefon/i)).toBeDefined()
+      expect(screen.getByLabelText(PHONE_LABEL)).toBeDefined()
     );
 
-    expect(screen.getByLabelText(/parol/i)).toBeDefined();
-    expect(screen.getByRole("button", { name: /kirish/i })).toBeDefined();
+    expect(screen.getByLabelText(PASSWORD_LABEL)).toBeDefined();
+    expect(screen.getByRole("button", { name: SUBMIT_LABEL })).toBeDefined();
   });
 
   it("bounces a signed-out visitor off a guarded route onto sign-in", async () => {
     renderApp("/members");
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /kirish/i })).toBeDefined()
+      expect(screen.getByRole("button", { name: SUBMIT_LABEL })).toBeDefined()
     );
   });
 
@@ -96,11 +101,13 @@ describe("sign-in", () => {
 
     renderApp("/sign-in");
 
-    await waitFor(() => expect(screen.getByLabelText(/parol/i)).toBeDefined());
+    await waitFor(() =>
+      expect(screen.getByLabelText(PASSWORD_LABEL)).toBeDefined()
+    );
 
-    await user.type(screen.getByLabelText(/telefon/i), "907661770");
-    await user.type(screen.getByLabelText(/parol/i), "1111");
-    await user.click(screen.getByRole("button", { name: /kirish/i }));
+    await user.type(screen.getByLabelText(PHONE_LABEL), "907661770");
+    await user.type(screen.getByLabelText(PASSWORD_LABEL), "1111");
+    await user.click(screen.getByRole("button", { name: SUBMIT_LABEL }));
 
     await waitFor(() =>
       expect(requests.some((r) => r.includes("/auth/login"))).toBe(true)

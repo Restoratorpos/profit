@@ -8,12 +8,18 @@ import {
   useState,
 } from "react";
 import { purgeCache } from "@/lib/query-client";
-import { signIn as requestSignIn, signOut as requestSignOut } from "./api";
+import {
+  signIn as requestSignIn,
+  signOut as requestSignOut,
+  restoreSession,
+} from "./api";
 import type { AuthUser } from "./session";
 import { onAccessTokenCleared } from "./tokens";
 
 export interface AuthState {
   isAuthenticated: boolean;
+  /** True until the boot session check has answered. Guards must not run yet. */
+  isRestoring: boolean;
   signIn: (phone: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   user: AuthUser | null;
@@ -24,18 +30,55 @@ const AuthContext = createContext<AuthState | null>(null);
 interface AuthProviderProperties {
   children: ReactNode;
   /**
-   * Resolved before render by main.tsx, so the first paint already knows
-   * whether there is a session. Guessing and correcting would flash the
-   * sign-in screen at every already-signed-in operator on every reload.
+   * Only for tests, which supply a session directly rather than restoring one.
+   * Passing a user skips the boot check entirely.
    */
-  initialUser: AuthUser | null;
+  initialUser?: AuthUser | null;
+  /** Tests opt out of the network call by passing false. */
+  restoreOnMount?: boolean;
 }
 
 export const AuthProvider = ({
   children,
-  initialUser,
+  initialUser = null,
+  restoreOnMount = true,
 }: AuthProviderProperties) => {
   const [user, setUser] = useState<AuthUser | null>(initialUser);
+  const [isRestoring, setIsRestoring] = useState(restoreOnMount);
+
+  /*
+   * The session is restored here rather than with a top-level await in main.tsx.
+   *
+   * That await ran before createRoot().render(), so a request that hung — a dev
+   * proxy pointing at a backend that is not listening will hold one open rather
+   * than refuse it — meant React never mounted at all: a permanently blank page,
+   * no error, nothing to debug. Restoring inside React means the shell always
+   * paints and a stuck backend shows as a loading state that eventually resolves
+   * to the sign-in screen.
+   */
+  useEffect(() => {
+    if (!restoreOnMount) {
+      return;
+    }
+
+    let cancelled = false;
+
+    restoreSession()
+      .then((session) => {
+        if (!cancelled) {
+          setUser(session?.user ?? null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsRestoring(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restoreOnMount]);
 
   /*
    * A refresh can fail long after boot — the token expired, the account was
@@ -68,8 +111,14 @@ export const AuthProvider = ({
   }, []);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: user !== null, signIn, signOut }),
-    [user, signIn, signOut]
+    () => ({
+      user,
+      isAuthenticated: user !== null,
+      isRestoring,
+      signIn,
+      signOut,
+    }),
+    [user, isRestoring, signIn, signOut]
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;
