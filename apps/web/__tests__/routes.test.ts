@@ -25,12 +25,14 @@ import { describe, expect, it } from "vitest";
  */
 const routesDir = join(process.cwd(), "src/routes/_authed");
 
-/** Routes still legitimately showing a Placeholder, pending their port. */
-const NOT_YET_PORTED = new Set([
-  "devices.tsx",
-  // The dashboard renders nothing by design in apps/app too — not pending.
-  "index.tsx",
-]);
+/**
+ * Routes that legitimately name no feature.
+ *
+ * Every vertical is ported, so this is down to the dashboard — which renders
+ * nothing by design in apps/app too, because anything hardcoded there would be
+ * untranslated and contradict the language switcher.
+ */
+const NOT_YET_PORTED = new Set(["index.tsx"]);
 
 const routeFiles = readdirSync(routesDir).filter((name) =>
   name.endsWith(".tsx")
