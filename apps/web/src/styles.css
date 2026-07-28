@@ -1,0 +1,43 @@
+@import "tailwindcss";
+@import "@repo/design-system/styles/globals.css";
+
+/* The design system's globals.css only scans its own tree (`@source "../**"`),
+   so this app's classes have to be declared here or they never get generated. */
+@source "./";
+
+/* Inter is self-hosted via @fontsource-variable/inter (imported in main.tsx)
+   rather than fetched at build time by next/font — the terminal this runs on is
+   not always online, and a missing webfont must not change the layout. */
+:root {
+  --font-sans:
+    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+}
+
+/*
+ * ProFit nav surface.
+ *
+ * Only the sidebar's background/hover tones are set here, so the rail reads as
+ * its own panel. The accent stays whatever the design system's
+ * --sidebar-primary is (the brand green) — deliberately NOT overridden, so if
+ * --primary ever changes the navigation follows it instead of drifting.
+ */
+:root {
+  --sidebar: #ffffff;
+  --sidebar-accent: #f4f4f5;
+  --sidebar-accent-foreground: #111111;
+}
+
+.dark {
+  /* Near-black, a step darker than --background so the rail reads as a panel. */
+  --sidebar: #0b0b0c;
+  --sidebar-accent: #17181a;
+  --sidebar-accent-foreground: #fafafa;
+}
+
+/* The SPA owns the full viewport; there is no document flow to fall back on. */
+html,
+body,
+#root {
+  height: 100%;
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@repo/typescript-config/react-library.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    /*
+     * Bundler, not NodeNext: Vite resolves extensionless relative imports, and
+     * NodeNext would demand a `.js` suffix on every one of them — the opposite
+     * of apps/backend's rule. This is also why the design-system's subpath
+     * imports resolve without an `exports` map.
+     */
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    // Matches apps/app: pnpm's non-hoisted layout trips TS2742 on re-exported
+    // types from source-only packages when declarations are emitted.
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@repo/*": ["../../packages/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

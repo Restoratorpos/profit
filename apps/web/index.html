@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" class="touch-manipulation font-sans antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/icon.png" />
+    <link rel="apple-touch-icon" href="/apple-icon.png" />
+    <title>ProFit</title>
+    <meta name="description" content="Gym management." />
+    <script>
+      /*
+       * Paint in the stored theme before React mounts.
+       *
+       * next-themes only applies the class after hydration, which on a SPA means
+       * a white flash on every cold load — worse here than in the Next app,
+       * because there is no server-rendered HTML to carry the class. Mirrors
+       * next-themes' own storage key and `attribute="class"` setting.
+       */
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var theme =
+            stored && stored !== "system"
+              ? stored
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.classList.add(theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

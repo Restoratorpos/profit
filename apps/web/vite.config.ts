@@ -1,0 +1,62 @@
+import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+const src = fileURLToPath(new URL("./src", import.meta.url));
+const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
+const packagesRoot = fileURLToPath(new URL("../../packages", import.meta.url));
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+
+  resolve: {
+    alias: [
+      /*
+       * Mirrors tsconfig's `"@repo/*": ["../../packages/*"]`, and it is load
+       * bearing rather than a convenience.
+       *
+       * @repo/design-system's own files import each other by package name
+       * ("@repo/design-system/lib/utils"), but the package declares no
+       * dependency on itself, so pnpm never links it into its own
+       * node_modules. Dev papers over this — Vite resolves bare imports from
+       * this app's node_modules whatever the importer — while Rollup resolves
+       * relative to the importing file and fails the build. Aliasing by path
+       * makes both agree.
+       */
+      { find: /^@repo\//, replacement: `${packagesRoot}/` },
+      { find: /^@\//, replacement: `${src}/` },
+    ],
+  },
+
+  server: {
+    port: 3001,
+    /*
+     * @repo/design-system is a source-only package: pnpm symlinks it into
+     * node_modules and Vite resolves through the link to packages/design-system,
+     * which is outside this app's root. Without this, every component import
+     * 403s in dev.
+     */
+    fs: { allow: [workspaceRoot] },
+
+    proxy: {
+      /*
+       * Dev-only. The browser talks to /api on this origin and Vite forwards to
+       * the Hono backend, so cookies stay first-party and there is no CORS
+       * preflight in development. In production the SPA is served from the same
+       * origin as the API, or CORS_ORIGINS on the backend names this one.
+       */
+      "/api": {
+        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:7090",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
+
+  optimizeDeps: {
+    // Linked workspace packages must not be pre-bundled — they are source, and
+    // pre-bundling them freezes a stale copy that ignores edits.
+    exclude: ["@repo/design-system"],
+  },
+});
