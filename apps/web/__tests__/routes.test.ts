@@ -29,6 +29,7 @@ const routesDir = join(process.cwd(), "src/routes/_authed");
 const NOT_YET_PORTED = new Set([
   "attendance.tsx",
   "devices.tsx",
+  // The dashboard renders nothing by design in apps/app too — not pending.
   "index.tsx",
   "workers.tsx",
 ]);
