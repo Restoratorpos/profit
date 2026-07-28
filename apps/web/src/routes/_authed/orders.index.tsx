@@ -1,6 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Placeholder } from "@/components/placeholder";
 
 export const Route = createFileRoute("/_authed/orders/")({
-  component: () => <Placeholder titleKey="nav.orders" />,
+  component: RouteComponent,
 });
+
+function RouteComponent() {
+  return <div>Hello "/_authed/orders/"!</div>;
+}

@@ -106,7 +106,7 @@ describe("plans page", () => {
     );
 
     // Money is formatted for the desk, not echoed raw.
-    expect(screen.getByText("300 000 UZS")).toBeDefined();
+    expect(screen.getByText("300,000 UZS")).toBeDefined();
   });
 
   /**

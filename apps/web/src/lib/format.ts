@@ -6,11 +6,19 @@
  * of a hundred rows" is a real cost.
  */
 
-const AMOUNT_FORMAT = new Intl.NumberFormat("ru-RU", {
+/*
+ * `en-US`, matching what apps/app has always rendered — comma groups, not
+ * spaces. This briefly read `ru-RU` here, which silently restyled every price
+ * in the product from "300,000 UZS" to "300 000 UZS". Locale is a product
+ * decision; do not change it to match the UI language without being asked.
+ */
+const AMOUNT_FORMAT = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
 /**
+ * `"10000.00"` -> `"10,000 UZS"`.
+ *
  * Money as the front desk reads it. Null and unparseable both render as an
  * em dash rather than "0" — a missing price and a free plan are different
  * things, and showing them the same way loses the distinction.
