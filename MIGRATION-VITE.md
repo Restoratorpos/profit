@@ -8,7 +8,7 @@ Written 2026-07-28.
 | 1 — backend per-user auth | **done** — shipped as `requireCaller` |
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
 | 3 — SPA auth | **done** — sign-in, guards, refresh cookie, TanStack Router |
-| 4 — 9 feature verticals | **1 of 9** — `plans` done; it is the reference |
+| 4 — 9 feature verticals | **3 of 9** — `plans`, `transactions`, `members` |
 | 5 — cutover, delete `apps/app` | not started |
 
 ## The headline
@@ -308,8 +308,8 @@ Suggested order — smallest complete vertical first to validate the pattern, th
 by size:
 
 1. `plans` (9 endpoints) — **done**, the pattern proof
-2. `transactions` (6)
-3. `members` (12)
+2. `transactions` (6) — **done**; filter-as-query-key
+3. `members` (12) — **done**; paging, debounce, face enrolment (`lib/face/`)
 4. `orders` (6)
 5. `products` / `catalog` / `combos` (12)
 6. `inventory` / `suppliers` (10)
