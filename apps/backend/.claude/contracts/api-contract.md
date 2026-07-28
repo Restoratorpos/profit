@@ -90,6 +90,35 @@ Two consequences worth knowing:
 `/auth/logout` answers `204` for every input, including garbage, for the same
 reason.
 
+### Browsers ask for a cookie; everyone else keeps the token
+
+`/auth/login` and `/auth/register` take `mode: "token" | "cookie"`, defaulting to
+`token` so existing API and mobile clients are untouched.
+
+| mode | refresh token delivered as | in the body? |
+| --- | --- | --- |
+| `token` (default) | `refreshToken` in the JSON | yes |
+| `cookie` | `Set-Cookie: profit_refresh=…; HttpOnly; SameSite=Lax` | **no** |
+
+Never return both — the entire reason a browser asks for the cookie is that its
+own scripts must not be able to read the long-lived token.
+
+`/auth/refresh` and `/auth/logout` read the cookie when it is present and answer
+in kind, so a browser posts `{}` and never handles the token at all. A request
+carrying neither cookie nor body token gets **401 "Not signed in"**, not 400:
+the SPA calls this on every cold load to discover whether it has a session, so
+that is the ordinary answer for a signed-out visitor rather than a client error.
+
+Two deployment constraints follow from `SameSite=Lax`:
+
+- The SPA must be served from **the same origin as the API** (via the Vite proxy
+  in development). `Lax` is what blocks CSRF against `/auth/refresh`; going
+  cross-origin would need `SameSite=None; Secure`, and therefore HTTPS, which the
+  front-desk terminal does not have.
+- The cookie is `Path=/`, not `/auth`. In development the browser sees
+  `/api/auth/*` while this server sees `/auth/*`, so a narrower path would be set
+  and then never sent back.
+
 ### `/auth/verify` is load-bearing — do not change its shape
 
 `packages/auth` (Auth.js credentials provider) calls this from the Next.js

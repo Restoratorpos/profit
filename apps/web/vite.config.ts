@@ -1,62 +1,86 @@
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 const src = fileURLToPath(new URL("./src", import.meta.url));
 const workspaceRoot = fileURLToPath(new URL("../..", import.meta.url));
 const packagesRoot = fileURLToPath(new URL("../../packages", import.meta.url));
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => {
+  /*
+   * This config runs before Vite loads .env files, so `process.env.VITE_*` is
+   * empty here no matter what .env.local says — reading it directly would make
+   * the file look wired up while silently doing nothing. loadEnv is what
+   * actually reads it.
+   */
+  const env = loadEnv(mode, fileURLToPath(new URL(".", import.meta.url)), "");
 
-  resolve: {
-    alias: [
+  return {
+    plugins: [
       /*
-       * Mirrors tsconfig's `"@repo/*": ["../../packages/*"]`, and it is load
-       * bearing rather than a convenience.
+       * Must come before the React plugin — it generates routeTree.gen.ts from
+       * src/routes and rewrites route modules for code splitting, and React's
+       * transform has to run on the result.
        *
-       * @repo/design-system's own files import each other by package name
-       * ("@repo/design-system/lib/utils"), but the package declares no
-       * dependency on itself, so pnpm never links it into its own
-       * node_modules. Dev papers over this — Vite resolves bare imports from
-       * this app's node_modules whatever the importer — while Rollup resolves
-       * relative to the importing file and fails the build. Aliasing by path
-       * makes both agree.
+       * autoCodeSplitting is what keeps the bundle honest as the nine feature
+       * verticals land: each route's component is its own chunk instead of
+       * everything landing in one file.
        */
-      { find: /^@repo\//, replacement: `${packagesRoot}/` },
-      { find: /^@\//, replacement: `${src}/` },
+      tanstackRouter({ target: "react", autoCodeSplitting: true }),
+      react(),
+      tailwindcss(),
     ],
-  },
 
-  server: {
-    port: 3001,
-    /*
-     * @repo/design-system is a source-only package: pnpm symlinks it into
-     * node_modules and Vite resolves through the link to packages/design-system,
-     * which is outside this app's root. Without this, every component import
-     * 403s in dev.
-     */
-    fs: { allow: [workspaceRoot] },
+    resolve: {
+      alias: [
+        /*
+         * Mirrors tsconfig's `"@repo/*": ["../../packages/*"]`, and it is load
+         * bearing rather than a convenience.
+         *
+         * @repo/design-system's own files import each other by package name
+         * ("@repo/design-system/lib/utils"), but the package declares no
+         * dependency on itself, so pnpm never links it into its own
+         * node_modules. Dev papers over this — Vite resolves bare imports from
+         * this app's node_modules whatever the importer — while Rollup resolves
+         * relative to the importing file and fails the build. Aliasing by path
+         * makes both agree.
+         */
+        { find: /^@repo\//, replacement: `${packagesRoot}/` },
+        { find: /^@\//, replacement: `${src}/` },
+      ],
+    },
 
-    proxy: {
+    server: {
+      port: 3001,
       /*
-       * Dev-only. The browser talks to /api on this origin and Vite forwards to
-       * the Hono backend, so cookies stay first-party and there is no CORS
-       * preflight in development. In production the SPA is served from the same
-       * origin as the API, or CORS_ORIGINS on the backend names this one.
+       * @repo/design-system is a source-only package: pnpm symlinks it into
+       * node_modules and Vite resolves through the link to packages/design-system,
+       * which is outside this app's root. Without this, every component import
+       * 403s in dev.
        */
-      "/api": {
-        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:7090",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+      fs: { allow: [workspaceRoot] },
+
+      proxy: {
+        /*
+         * Dev-only. The browser talks to /api on this origin and Vite forwards to
+         * the Hono backend, so cookies stay first-party and there is no CORS
+         * preflight in development. In production the SPA is served from the same
+         * origin as the API, or CORS_ORIGINS on the backend names this one.
+         */
+        "/api": {
+          target: env.VITE_API_PROXY_TARGET || "http://localhost:7090",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ""),
+        },
       },
     },
-  },
 
-  optimizeDeps: {
-    // Linked workspace packages must not be pre-bundled — they are source, and
-    // pre-bundling them freezes a stale copy that ignores edits.
-    exclude: ["@repo/design-system"],
-  },
+    optimizeDeps: {
+      // Linked workspace packages must not be pre-bundled — they are source, and
+      // pre-bundling them freezes a stale copy that ignores edits.
+      exclude: ["@repo/design-system"],
+    },
+  };
 });

@@ -29,7 +29,16 @@ export interface NavItem {
   labelKey: MessageKey;
 }
 
-export const NAV_ITEMS: readonly NavItem[] = [
+/**
+ * Deliberately *not* annotated `readonly NavItem[]`.
+ *
+ * The annotation would widen every `href` to `string`, and TanStack Router's
+ * `Link` is typed against the generated route tree — keeping the literals means
+ * a nav entry pointing at a route that does not exist is a compile error rather
+ * than a dead link found by clicking. `NavItem` still documents the shape and is
+ * enforced structurally by `satisfies`.
+ */
+export const NAV_ITEMS = [
   {
     href: "/",
     labelKey: "nav.dashboard",
@@ -96,7 +105,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: ArrowLeftRightIcon,
     group: "daily",
   },
-] as const;
+] as const satisfies readonly NavItem[];
 
 /** Whether this route is the item's own, or somewhere below it. */
 const covers = (href: string, pathname: string): boolean => {

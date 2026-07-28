@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@repo/design-system/components/ui/sidebar";
 import { cn } from "@repo/design-system/lib/utils";
-import { Link, useLocation } from "react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { isNavItemActive, NAV_ITEMS } from "@/lib/navigation";
 

@@ -227,6 +227,11 @@ storybook-static/
 # Turborepo task cache
 .turbo
 
+### TanStack Router ###
+# Scratch files from @tanstack/router-plugin. routeTree.gen.ts is NOT ignored —
+# it is committed so a fresh clone typechecks before anything has been run.
+.tanstack/
+
 ### Vercel ###
 
 ### Windows ###

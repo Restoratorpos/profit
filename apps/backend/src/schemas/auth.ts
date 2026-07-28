@@ -26,9 +26,38 @@ export const registerSchema = credentialsSchema.extend({
   gymName: z.string().trim().min(2).max(200).optional(),
 });
 
-export const refreshSchema = z.object({
-  refreshToken: z.string().min(1),
+/**
+ * How the caller wants its refresh token handled.
+ *
+ * `token` is the default so every existing client keeps working untouched: the
+ * pair comes back in the response body and the caller stores it. `cookie` is
+ * what a browser asks for — the refresh token is set as an httpOnly cookie and
+ * omitted from the body, so page scripts can never read it.
+ */
+export const sessionModeSchema = z.enum(["token", "cookie"]).default("token");
+
+export const loginSchema = credentialsSchema.extend({
+  mode: sessionModeSchema,
 });
+
+/**
+ * The wire shape for registration. `RegisterInput` stays the *service's* input
+ * and knows nothing about `mode`, which is a transport concern the route
+ * strips off before calling it.
+ */
+export const registerRequestSchema = registerSchema.extend({
+  mode: sessionModeSchema,
+});
+
+/**
+ * Optional because a browser sends the token as a cookie rather than in the
+ * body. The route requires one or the other and 400s when neither is present.
+ */
+export const refreshSchema = z.object({
+  refreshToken: z.string().min(1).optional(),
+});
+
+export type SessionMode = z.infer<typeof sessionModeSchema>;
 
 export type Credentials = z.infer<typeof credentialsSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;

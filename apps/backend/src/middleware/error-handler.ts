@@ -11,7 +11,23 @@ export const onError: ErrorHandler<AppEnv> = (error, c) => {
   const log = c.get("logger") ?? logger;
 
   if (error instanceof AppError) {
-    log.warn({ code: error.code, err: error }, error.message);
+    /*
+     * Expected outcomes are not warnings.
+     *
+     * A signed-out browser asking /auth/refresh whether it has a session gets a
+     * 401 on every cold load; a throttled sign-in gets a 429. Logging those at
+     * `warn` with a full stack trace buries the errors that actually mean
+     * something, and the stack of a deliberately thrown AppError says nothing a
+     * status code and a path do not.
+     */
+    const isExpected =
+      error.status === 401 || error.status === 403 || error.status === 404;
+
+    if (isExpected) {
+      log.debug({ code: error.code, status: error.status }, error.message);
+    } else {
+      log.warn({ code: error.code, err: error }, error.message);
+    }
 
     return c.json(
       {

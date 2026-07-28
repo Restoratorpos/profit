@@ -7,7 +7,7 @@ Written 2026-07-28.
 | 0 — git | **done** (`95c06ec`) |
 | 1 — backend per-user auth | **done** — shipped as `requireCaller` |
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
-| 3 — SPA auth | not started — **unblocked** |
+| 3 — SPA auth | **done** — sign-in, guards, refresh cookie, TanStack Router |
 | 4 — 9 feature verticals | not started — **unblocked** |
 | 5 — cutover, delete `apps/app` | not started |
 
@@ -228,6 +228,27 @@ from the app's `node_modules` regardless, and only the production build fails.
   moves from a server cookie read to a client read at boot.
 
 ### Phase 3 — Auth in the SPA
+
+**Done.** Router is **TanStack Router** (file-based, `autoCodeSplitting`), not
+React Router — swapped during this phase while it cost three files.
+
+Token handling: **refresh token in an httpOnly cookie, access token in memory.**
+`/auth/login` takes `mode: "cookie"`, sets the cookie and omits `refreshToken`
+from the body; page scripts can therefore never read the long-lived token, and an
+XSS buys minutes rather than a month. A reload loses the in-memory half, so
+`main.tsx` calls `/auth/refresh` before the first render.
+
+Two things that are load-bearing rather than tidy:
+
+- **Refresh is single-flight.** The backend rotates refresh tokens, so two
+  concurrent refreshes would race — the first rotates, the second presents a
+  revoked token and signs the operator out. A dashboard 401ing several queries
+  at once is the normal case. Covered by `__tests__/api-refresh.test.ts`.
+- **The query cache is persisted and busted per user.** A front desk is a shared
+  machine; the next operator must not paint from the previous one's cache.
+  `purgeCache()` runs on sign-in, sign-out, and on any failed refresh.
+
+
 
 - New `@repo/auth-client`: `login()`, `logout()`, `refresh()`, a fetch wrapper
   that retries once on 401 after refreshing, and an auth context.

@@ -43,7 +43,12 @@ const envSchema = z.object({
   SERVICE_TOKEN: z.string().min(16).optional(),
 
   // Comma-separated list of browser origins allowed to call this API.
-  CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  // :3000 is apps/app, :3001 is apps/web. apps/web normally reaches this server
+  // through the Vite proxy (same-origin, so CORS never engages); the entry here
+  // is for the case where it is pointed straight at this port.
+  CORS_ORIGINS: z
+    .string()
+    .default("http://localhost:3000,http://localhost:3001"),
 
   // Encrypts the access terminals' admin passwords at rest (see lib/secret.ts).
   // Optional so the server still boots without it — but saving a terminal

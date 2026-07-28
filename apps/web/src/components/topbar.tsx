@@ -6,6 +6,7 @@ import type { Messages } from "@/lib/i18n/dictionary";
 import { BranchSwitcher } from "./branch-switcher";
 import { LanguageSwitcher } from "./language-switcher";
 import { ThemeSwitcher } from "./theme-switcher";
+import { UserMenu } from "./user-menu";
 
 interface TopbarProperties {
   activeBranchId: string;
@@ -14,14 +15,6 @@ interface TopbarProperties {
   messages: Messages;
 }
 
-/*
- * UserMenu is deliberately absent until Phase 3.
- *
- * It renders the signed-in worker and the sign-out action, both of which come
- * from next-auth's useSession() in the Next app. There is no session here yet —
- * putting a placeholder in its slot would make the shell look finished when the
- * auth layer has not been built.
- */
 export const Topbar = ({
   activeBranchId,
   branches,
@@ -40,6 +33,8 @@ export const Topbar = ({
     <div className="ml-auto flex items-center gap-2">
       <LanguageSwitcher locale={locale} messages={messages} />
       <ThemeSwitcher messages={messages} />
+      <Separator className="mx-1 h-8" orientation="vertical" />
+      <UserMenu messages={messages} />
     </div>
   </header>
 );

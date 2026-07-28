@@ -2,7 +2,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@repo/design-system/components/ui/sidebar";
-import { Outlet } from "react-router";
+import { Outlet } from "@tanstack/react-router";
 import { BRANCH_COOKIE, PLACEHOLDER_BRANCHES } from "@/lib/branches";
 import { readDeviceCookie } from "@/lib/device-prefs";
 import { useLocale } from "@/lib/i18n/provider";

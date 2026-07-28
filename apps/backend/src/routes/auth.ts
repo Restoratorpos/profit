@@ -1,11 +1,19 @@
 import { zValidator } from "@hono/zod-validator";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
+import { UnauthorizedError } from "../lib/errors.js";
+import {
+  clearRefreshCookie,
+  readRefreshCookie,
+  setRefreshCookie,
+} from "../lib/session-cookie.js";
 import { requireAuth } from "../middleware/auth.js";
 import { loginRateLimit } from "../middleware/login-rate-limit.js";
 import {
   credentialsSchema,
+  loginSchema,
   refreshSchema,
-  registerSchema,
+  registerRequestSchema,
+  type SessionMode,
 } from "../schemas/auth.js";
 import {
   login,
@@ -14,13 +22,41 @@ import {
   register,
   verifyCredentials,
 } from "../services/auth.service.js";
-import type { AppEnv } from "../types/index.js";
+import type { AppEnv, AuthUser } from "../types/index.js";
+
+type Session = {
+  user: AuthUser;
+  accessToken: string;
+  refreshToken: string;
+};
+
+/**
+ * Hands a session back in whichever shape the caller asked for.
+ *
+ * In `cookie` mode the refresh token is **omitted from the body** and set as an
+ * httpOnly cookie instead. Returning it in both places would defeat the purpose
+ * — the whole reason a browser wants the cookie is that its own scripts must not
+ * be able to read the long-lived token.
+ */
+const sessionResponse = (
+  c: Context<AppEnv>,
+  { refreshToken, ...rest }: Session,
+  mode: SessionMode
+) => {
+  if (mode !== "cookie") {
+    return { ...rest, refreshToken };
+  }
+
+  setRefreshCookie(c, refreshToken);
+
+  return rest;
+};
 
 export const authRoutes = new Hono<AppEnv>()
-  .post("/register", zValidator("json", registerSchema), async (c) => {
-    const session = await register(c.req.valid("json"));
+  .post("/register", zValidator("json", registerRequestSchema), async (c) => {
+    const { mode, ...input } = c.req.valid("json");
 
-    return c.json(session, 201);
+    return c.json(sessionResponse(c, await register(input), mode), 201);
   })
   /**
    * The throttle sits after validation on purpose: it keys on the *normalised*
@@ -28,28 +64,55 @@ export const authRoutes = new Hono<AppEnv>()
    */
   .post(
     "/login",
-    zValidator("json", credentialsSchema),
+    zValidator("json", loginSchema),
     loginRateLimit,
     async (c) => {
-      const { phone, password } = c.req.valid("json");
+      const { phone, password, mode } = c.req.valid("json");
 
-      return c.json(await login(phone, password));
+      return c.json(sessionResponse(c, await login(phone, password), mode));
     }
   )
+  /**
+   * Takes the refresh token from the cookie when there is one, and answers in
+   * kind. A browser therefore never handles the token at all: it posts an empty
+   * body and gets a new access token plus a refreshed cookie.
+   */
   .post("/refresh", zValidator("json", refreshSchema), async (c) => {
-    const { refreshToken } = c.req.valid("json");
+    const fromCookie = readRefreshCookie(c);
+    const refreshToken = fromCookie ?? c.req.valid("json").refreshToken;
 
-    return c.json(await refreshSession(refreshToken));
+    if (!refreshToken) {
+      /*
+       * 401, not 400. The SPA calls this on every cold load to find out whether
+       * it has a session — the access token lives in memory and does not survive
+       * a reload — so "no token here" is the ordinary answer for a signed-out
+       * visitor, not a malformed request.
+       */
+      throw new UnauthorizedError("Not signed in");
+    }
+
+    const session = await refreshSession(refreshToken);
+
+    return c.json(sessionResponse(c, session, fromCookie ? "cookie" : "token"));
   })
   /**
-   * Revokes a refresh token. Always 204, even for a token that was already
-   * invalid — see the service for why this must not be an oracle.
+   * Revokes a refresh token. Always 204, even for one that was already invalid —
+   * see the service for why this must not be an oracle.
    *
    * Takes no bearer token: signing out has to work when the access token has
    * already expired, which is exactly when a user is most likely to try.
    */
   .post("/logout", zValidator("json", refreshSchema), async (c) => {
-    await logout(c.req.valid("json").refreshToken);
+    const refreshToken =
+      readRefreshCookie(c) ?? c.req.valid("json").refreshToken;
+
+    if (refreshToken) {
+      await logout(refreshToken);
+    }
+
+    // Unconditional: a caller asking to sign out should end up without a cookie
+    // whether or not the one they sent could be read.
+    clearRefreshCookie(c);
 
     return c.body(null, 204);
   })
