@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { apiFetch } from "@/lib/auth/api";
+import { apiFetch } from "@/lib/api/client";
 import { getAccessToken, setAccessToken } from "@/lib/auth/tokens";
 
 const SESSION = {
