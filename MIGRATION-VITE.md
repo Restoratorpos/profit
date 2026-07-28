@@ -8,7 +8,7 @@ Written 2026-07-28.
 | 1 — backend per-user auth | **done** — shipped as `requireCaller` |
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
 | 3 — SPA auth | **done** — sign-in, guards, refresh cookie, TanStack Router |
-| 4 — 9 feature verticals | **3 of 9** — `plans`, `transactions`, `members` |
+| 4 — 9 feature verticals | **done** — all nine |
 | 5 — cutover, delete `apps/app` | not started |
 
 ## The headline
@@ -310,12 +310,12 @@ by size:
 1. `plans` (9 endpoints) — **done**, the pattern proof
 2. `transactions` (6) — **done**; filter-as-query-key
 3. `members` (12) — **done**; paging, debounce, face enrolment (`lib/face/`)
-4. `orders` (6)
-5. `products` / `catalog` / `combos` (12)
-6. `inventory` / `suppliers` (10)
-7. `workers` (16)
-8. `attendance`
-9. `devices` (19) — largest, and coupled to the Face-ID/ISAPI work; do it last
+4. `orders` (6) — **done**; setQueryData for drawer writes
+5. `products` / `catalog` / `combos` (12) — **done**; five routes, one loader
+6. `inventory` / `suppliers` (10) — **done**; three views of the same documents
+7. `workers` (16) — **done**; typed URL search params for the date range
+8. `attendance` — **done**; the door poll became refetchInterval
+9. `devices` (19) — **done**; hardware calls resolve with what the terminal said
 
 ### Phase 5 — Cutover and delete
 
