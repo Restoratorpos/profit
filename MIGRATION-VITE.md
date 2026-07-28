@@ -1,6 +1,15 @@
 # Migrating `apps/app` from Next.js to React + Vite
 
-Status: **plan, not started.** Written 2026-07-28.
+Written 2026-07-28.
+
+| Phase | Status |
+|---|---|
+| 0 — git | **done** (`95c06ec`) |
+| 1 — backend `requireUser` | not started |
+| 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
+| 3 — SPA auth | not started |
+| 4 — 9 feature verticals | not started (blocked on Phase 1) |
+| 5 — cutover, delete `apps/app` | not started |
 
 ## The headline
 
@@ -184,6 +193,12 @@ every feature endpoint must return 200 with a bearer token and 401 without one.
 
 New workspace; both run at once on different ports. Nothing is deleted yet.
 Depends on nothing — this can be the first thing built.
+
+Done. `apps/app` on :3000, `apps/web` on :3001. `pnpm --filter web dev`.
+One gotcha worth keeping: `vite.config.ts` must alias `@repo/*` by path.
+The design system's files import each other by package name but the package
+has no dependency on itself, so pnpm never self-links it — dev resolves it
+from the app's `node_modules` regardless, and only the production build fails.
 
 - Vite, React 19, React Router 7, TanStack Query, Tailwind v4 via
   `@tailwindcss/vite` (not the postcss plugin).
