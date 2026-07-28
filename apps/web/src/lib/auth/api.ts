@@ -43,6 +43,52 @@ export const signIn = async (
   return session;
 };
 
+export interface RegisterInput {
+  name: string;
+  password: string;
+  phone: string;
+}
+
+/**
+ * Creates the account and lands signed in, in one call.
+ *
+ * The Next version needed two: `POST /api/register` through a same-origin proxy
+ * (the backend URL was server-only), and then a separate next-auth `signIn`
+ * with the same credentials — because Auth.js owned the session and
+ * deliberately discarded the token the backend already returned. That had a
+ * genuinely bad failure mode in the middle: an account created but the sign-in
+ * rejected left the user reading "Account created. Please sign in."
+ *
+ * Here the backend's own session is the session, so `mode: "cookie"` makes
+ * registration and sign-in the same round trip and that gap cannot exist.
+ *
+ * Registration onboards a *tenant*, not a person: the backend creates a gym, a
+ * branch and an `owner` worker in one transaction.
+ */
+export const register = async ({
+  name,
+  password,
+  phone,
+}: RegisterInput): Promise<Session> => {
+  // Not `request()`: signing up must not be attributed to whoever was signed in
+  // before, and there is no session to attach anyway.
+  const response = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, password, phone, mode: "cookie" }),
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+
+  const session = sessionSchema.parse(await response.json());
+  setAccessToken(session.accessToken);
+
+  return session;
+};
+
 export const signOut = async (): Promise<void> => {
   try {
     // Best effort: the server revokes the refresh token and expires the cookie.

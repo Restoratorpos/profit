@@ -17,7 +17,12 @@ import {
 import { Input } from "@repo/design-system/components/ui/input";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import type { FormEvent } from "react";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth/context";
@@ -116,6 +121,18 @@ function SignInPage() {
                 {mutation.isPending ? <Spinner /> : null}
                 Kirish
               </Button>
+
+              {/* The only way to reach sign-up: it is deliberately not in the
+                  sidebar, since registration onboards a whole new tenant. */}
+              <p className="text-center text-base text-muted-foreground">
+                Hisobingiz yo'qmi?{" "}
+                <Link
+                  className="text-primary-accent underline-offset-4 hover:underline"
+                  to="/sign-up"
+                >
+                  Hisob yaratish
+                </Link>
+              </p>
             </FieldGroup>
           </form>
         </CardContent>

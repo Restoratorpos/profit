@@ -38,6 +38,16 @@ const routeFiles = readdirSync(routesDir).filter((name) =>
   name.endsWith(".tsx")
 );
 
+/**
+ * The unauthenticated routes live one level up, alongside `__root` and
+ * `_authed`. They carry exactly the same clobbering risk, so they are checked
+ * for the scaffold too — just not for naming a feature, since sign-in and
+ * sign-up belong to `lib/auth` rather than to any vertical.
+ */
+const rootRouteFiles = readdirSync(join(process.cwd(), "src/routes")).filter(
+  (name) => name.endsWith(".tsx") && !name.startsWith("_")
+);
+
 describe("route files", () => {
   it("finds route files to check", () => {
     // A glob that silently matches nothing would make every assertion vacuous.
@@ -59,5 +69,22 @@ describe("route files", () => {
     // A ported route names a feature component; it never renders a Placeholder.
     expect(source).toContain("@/features/");
     expect(source).not.toContain("Placeholder");
+  });
+});
+
+describe("unauthenticated route files", () => {
+  it("finds sign-in and sign-up", () => {
+    expect(rootRouteFiles).toContain("sign-in.tsx");
+    expect(rootRouteFiles).toContain("sign-up.tsx");
+  });
+
+  it.each(rootRouteFiles)("%s is not the plugin's scaffold", (name) => {
+    const source = readFileSync(
+      join(process.cwd(), "src/routes", name),
+      "utf8"
+    );
+
+    expect(source).not.toContain("function RouteComponent");
+    expect(source).not.toContain('Hello "/');
   });
 });

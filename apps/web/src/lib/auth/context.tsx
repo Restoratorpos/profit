@@ -9,6 +9,8 @@ import {
 } from "react";
 import { purgeCache } from "@/lib/query-client";
 import {
+  type RegisterInput,
+  register as requestRegister,
   signIn as requestSignIn,
   signOut as requestSignOut,
   restoreSession,
@@ -22,6 +24,8 @@ export interface AuthState {
   isRestoring: boolean;
   signIn: (phone: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Onboards a whole tenant — gym, branch and owner — and signs them in. */
+  signUp: (input: RegisterInput) => Promise<void>;
   user: AuthUser | null;
 }
 
@@ -104,6 +108,15 @@ export const AuthProvider = ({
     setUser(session.user);
   }, []);
 
+  const signUp = useCallback(async (input: RegisterInput) => {
+    const session = await requestRegister(input);
+
+    // A brand-new tenant has nothing cached, but the terminal may still hold
+    // the previous operator's gym.
+    purgeCache();
+    setUser(session.user);
+  }, []);
+
   const signOut = useCallback(async () => {
     await requestSignOut();
     setUser(null);
@@ -117,8 +130,9 @@ export const AuthProvider = ({
       isRestoring,
       signIn,
       signOut,
+      signUp,
     }),
-    [user, isRestoring, signIn, signOut]
+    [user, isRestoring, signIn, signOut, signUp]
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

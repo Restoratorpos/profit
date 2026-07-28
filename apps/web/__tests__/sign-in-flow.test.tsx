@@ -114,3 +114,62 @@ describe("sign-in", () => {
     );
   });
 });
+
+const SIGNUP_NAME = /ismingiz/i;
+const SIGNUP_SUBMIT = /hisob yaratish/i;
+
+describe("sign-up", () => {
+  it("renders the tenant-registration form", async () => {
+    renderApp("/sign-up");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(SIGNUP_NAME)).toBeDefined()
+    );
+
+    expect(screen.getByLabelText(PHONE_LABEL)).toBeDefined();
+    expect(screen.getByLabelText(PASSWORD_LABEL)).toBeDefined();
+  });
+
+  /**
+   * One call, not two. The Next version registered through a proxy and then ran
+   * a separate next-auth sign-in, which could leave an account created but the
+   * user not signed in. Here `mode: "cookie"` makes them the same round trip.
+   */
+  it("posts once to /auth/register and does not then call /auth/login", async () => {
+    const user = userEvent.setup();
+
+    renderApp("/sign-up");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(SIGNUP_NAME)).toBeDefined()
+    );
+
+    await user.type(screen.getByLabelText(SIGNUP_NAME), "Diyorbek");
+    await user.type(screen.getByLabelText(PHONE_LABEL), "907661770");
+    await user.type(screen.getByLabelText(PASSWORD_LABEL), "1111");
+    await user.click(screen.getByRole("button", { name: SIGNUP_SUBMIT }));
+
+    await waitFor(() =>
+      expect(requests.some((r) => r.includes("/auth/register"))).toBe(true)
+    );
+
+    expect(requests.some((r) => r.includes("/auth/login"))).toBe(false);
+  });
+
+  it("does not submit when the details fail local validation", async () => {
+    const user = userEvent.setup();
+
+    renderApp("/sign-up");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(SIGNUP_NAME)).toBeDefined()
+    );
+
+    // Name too short and no phone at all — the backend would reject both, but
+    // the operator should not need a round trip to find that out.
+    await user.type(screen.getByLabelText(SIGNUP_NAME), "D");
+    await user.click(screen.getByRole("button", { name: SIGNUP_SUBMIT }));
+
+    expect(requests.some((r) => r.includes("/auth/register"))).toBe(false);
+  });
+});
