@@ -1,9 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { catalogLoader, CatalogPage } from "@/features/products";
 
 export const Route = createFileRoute("/_authed/products/")({
-  component: RouteComponent,
+  loader: catalogLoader,
+  component: () => <CatalogPage tab="products" />,
 });
-
-function RouteComponent() {
-  return <div>Hello "/_authed/products/"!</div>;
-}

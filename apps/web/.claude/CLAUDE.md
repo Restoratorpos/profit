@@ -38,6 +38,25 @@ src/
 - Features do not import each other's internals. If two need the same thing, it
   belongs in `lib/` or `components/`.
 
+## The router plugin will overwrite your route files
+
+`@tanstack/router-plugin` scaffolds a stub into any route file it finds missing
+or empty. Shell redirection truncates before it writes, so `cat > route.tsx`
+with the dev server running gives the watcher an empty file to scaffold over —
+**mid-write**. Five routes were silently lost this way; `/transactions` and
+friends reverted to `Hello "/_authed/transactions"!`.
+
+Nothing in the normal loop catches it. A scaffold is valid TypeScript, so
+typecheck, lint and the production build all pass. It only shows up by opening
+the page.
+
+- **Write route files with an editor/atomic write, never `cat >` or `>`.**
+- `__tests__/routes.test.ts` asserts no route is a scaffold and every ported
+  route names a `@/features/` component. Keep its `NOT_YET_PORTED` list current
+  as verticals land.
+- If a route renders `Hello "/_authed/…"!`, it was clobbered — restore it, do
+  not re-derive why it "stopped working".
+
 ## Porting a vertical from apps/app
 
 The translation is mechanical. For `<name>`:
