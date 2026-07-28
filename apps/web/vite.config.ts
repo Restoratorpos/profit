@@ -55,6 +55,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3001,
       /*
+       * Fail instead of quietly moving to the next free port.
+       *
+       * Vite's default is to hop to 3002, 3003, … when 3001 is taken, print the
+       * new URL, and carry on. On a machine where an old dev server is still
+       * running that is actively misleading: you open :3001, get the *stale*
+       * server, and spend an afternoon wondering why your changes have no
+       * effect. Better to refuse to start and say the port is busy.
+       */
+      strictPort: true,
+      /*
        * @repo/design-system is a source-only package: pnpm symlinks it into
        * node_modules and Vite resolves through the link to packages/design-system,
        * which is outside this app's root. Without this, every component import
