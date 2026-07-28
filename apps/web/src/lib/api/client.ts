@@ -158,5 +158,9 @@ export const apiPost = <T>(path: string, body: unknown): Promise<T> =>
 export const apiPatch = <T>(path: string, body: unknown): Promise<T> =>
   apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 
+/** Full replace, as opposed to PATCH's partial one. The backend distinguishes. */
+export const apiPut = <T>(path: string, body: unknown): Promise<T> =>
+  apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) });
+
 export const apiDelete = <T = void>(path: string): Promise<T> =>
   apiFetch<T>(path, { method: "DELETE" });

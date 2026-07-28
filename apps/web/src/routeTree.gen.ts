@@ -17,11 +17,15 @@ import { Route as AuthedDevicesRouteImport } from './routes/_authed/devices'
 import { Route as AuthedInventoryRouteImport } from './routes/_authed/inventory'
 import { Route as AuthedMembersRouteImport } from './routes/_authed/members'
 import { Route as AuthedPlansRouteImport } from './routes/_authed/plans'
-import { Route as AuthedProductsRouteImport } from './routes/_authed/products'
 import { Route as AuthedTransactionsRouteImport } from './routes/_authed/transactions'
 import { Route as AuthedWorkersRouteImport } from './routes/_authed/workers'
 import { Route as AuthedOrdersIndexRouteImport } from './routes/_authed/orders.index'
 import { Route as AuthedOrdersNewRouteImport } from './routes/_authed/orders.new'
+import { Route as AuthedProductsIndexRouteImport } from './routes/_authed/products.index'
+import { Route as AuthedProductsIngredientsRouteImport } from './routes/_authed/products.ingredients'
+import { Route as AuthedProductsCombosIndexRouteImport } from './routes/_authed/products.combos.index'
+import { Route as AuthedProductsCombosComboIdRouteImport } from './routes/_authed/products.combos.$comboId'
+import { Route as AuthedProductsCombosNewRouteImport } from './routes/_authed/products.combos.new'
 
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
@@ -62,11 +66,6 @@ const AuthedPlansRoute = AuthedPlansRouteImport.update({
   path: '/plans',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedProductsRoute = AuthedProductsRouteImport.update({
-  id: '/products',
-  path: '/products',
-  getParentRoute: () => AuthedRoute,
-} as any)
 const AuthedTransactionsRoute = AuthedTransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
@@ -87,6 +86,34 @@ const AuthedOrdersNewRoute = AuthedOrdersNewRouteImport.update({
   path: '/orders/new',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedProductsIndexRoute = AuthedProductsIndexRouteImport.update({
+  id: '/products/',
+  path: '/products/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedProductsIngredientsRoute =
+  AuthedProductsIngredientsRouteImport.update({
+    id: '/products/ingredients',
+    path: '/products/ingredients',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedProductsCombosIndexRoute =
+  AuthedProductsCombosIndexRouteImport.update({
+    id: '/products/combos/',
+    path: '/products/combos/',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedProductsCombosComboIdRoute =
+  AuthedProductsCombosComboIdRouteImport.update({
+    id: '/products/combos/$comboId',
+    path: '/products/combos/$comboId',
+    getParentRoute: () => AuthedRoute,
+  } as any)
+const AuthedProductsCombosNewRoute = AuthedProductsCombosNewRouteImport.update({
+  id: '/products/combos/new',
+  path: '/products/combos/new',
+  getParentRoute: () => AuthedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
@@ -96,11 +123,15 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof AuthedInventoryRoute
   '/members': typeof AuthedMembersRoute
   '/plans': typeof AuthedPlansRoute
-  '/products': typeof AuthedProductsRoute
   '/transactions': typeof AuthedTransactionsRoute
   '/workers': typeof AuthedWorkersRoute
   '/orders/new': typeof AuthedOrdersNewRoute
+  '/products/ingredients': typeof AuthedProductsIngredientsRoute
   '/orders/': typeof AuthedOrdersIndexRoute
+  '/products/': typeof AuthedProductsIndexRoute
+  '/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
+  '/products/combos/new': typeof AuthedProductsCombosNewRoute
+  '/products/combos/': typeof AuthedProductsCombosIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
@@ -109,12 +140,16 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthedInventoryRoute
   '/members': typeof AuthedMembersRoute
   '/plans': typeof AuthedPlansRoute
-  '/products': typeof AuthedProductsRoute
   '/transactions': typeof AuthedTransactionsRoute
   '/workers': typeof AuthedWorkersRoute
   '/': typeof AuthedIndexRoute
   '/orders/new': typeof AuthedOrdersNewRoute
+  '/products/ingredients': typeof AuthedProductsIngredientsRoute
   '/orders': typeof AuthedOrdersIndexRoute
+  '/products': typeof AuthedProductsIndexRoute
+  '/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
+  '/products/combos/new': typeof AuthedProductsCombosNewRoute
+  '/products/combos': typeof AuthedProductsCombosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,12 +160,16 @@ export interface FileRoutesById {
   '/_authed/inventory': typeof AuthedInventoryRoute
   '/_authed/members': typeof AuthedMembersRoute
   '/_authed/plans': typeof AuthedPlansRoute
-  '/_authed/products': typeof AuthedProductsRoute
   '/_authed/transactions': typeof AuthedTransactionsRoute
   '/_authed/workers': typeof AuthedWorkersRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/orders/new': typeof AuthedOrdersNewRoute
+  '/_authed/products/ingredients': typeof AuthedProductsIngredientsRoute
   '/_authed/orders/': typeof AuthedOrdersIndexRoute
+  '/_authed/products/': typeof AuthedProductsIndexRoute
+  '/_authed/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
+  '/_authed/products/combos/new': typeof AuthedProductsCombosNewRoute
+  '/_authed/products/combos/': typeof AuthedProductsCombosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -142,11 +181,15 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/members'
     | '/plans'
-    | '/products'
     | '/transactions'
     | '/workers'
     | '/orders/new'
+    | '/products/ingredients'
     | '/orders/'
+    | '/products/'
+    | '/products/combos/$comboId'
+    | '/products/combos/new'
+    | '/products/combos/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/sign-in'
@@ -155,12 +198,16 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/members'
     | '/plans'
-    | '/products'
     | '/transactions'
     | '/workers'
     | '/'
     | '/orders/new'
+    | '/products/ingredients'
     | '/orders'
+    | '/products'
+    | '/products/combos/$comboId'
+    | '/products/combos/new'
+    | '/products/combos'
   id:
     | '__root__'
     | '/_authed'
@@ -170,12 +217,16 @@ export interface FileRouteTypes {
     | '/_authed/inventory'
     | '/_authed/members'
     | '/_authed/plans'
-    | '/_authed/products'
     | '/_authed/transactions'
     | '/_authed/workers'
     | '/_authed/'
     | '/_authed/orders/new'
+    | '/_authed/products/ingredients'
     | '/_authed/orders/'
+    | '/_authed/products/'
+    | '/_authed/products/combos/$comboId'
+    | '/_authed/products/combos/new'
+    | '/_authed/products/combos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -241,13 +292,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedPlansRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/products': {
-      id: '/_authed/products'
-      path: '/products'
-      fullPath: '/products'
-      preLoaderRoute: typeof AuthedProductsRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/transactions': {
       id: '/_authed/transactions'
       path: '/transactions'
@@ -276,6 +320,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedOrdersNewRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/products/': {
+      id: '/_authed/products/'
+      path: '/products'
+      fullPath: '/products/'
+      preLoaderRoute: typeof AuthedProductsIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/products/ingredients': {
+      id: '/_authed/products/ingredients'
+      path: '/products/ingredients'
+      fullPath: '/products/ingredients'
+      preLoaderRoute: typeof AuthedProductsIngredientsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/products/combos/': {
+      id: '/_authed/products/combos/'
+      path: '/products/combos'
+      fullPath: '/products/combos/'
+      preLoaderRoute: typeof AuthedProductsCombosIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/products/combos/$comboId': {
+      id: '/_authed/products/combos/$comboId'
+      path: '/products/combos/$comboId'
+      fullPath: '/products/combos/$comboId'
+      preLoaderRoute: typeof AuthedProductsCombosComboIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/products/combos/new': {
+      id: '/_authed/products/combos/new'
+      path: '/products/combos/new'
+      fullPath: '/products/combos/new'
+      preLoaderRoute: typeof AuthedProductsCombosNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
   }
 }
 
@@ -285,12 +364,16 @@ interface AuthedRouteChildren {
   AuthedInventoryRoute: typeof AuthedInventoryRoute
   AuthedMembersRoute: typeof AuthedMembersRoute
   AuthedPlansRoute: typeof AuthedPlansRoute
-  AuthedProductsRoute: typeof AuthedProductsRoute
   AuthedTransactionsRoute: typeof AuthedTransactionsRoute
   AuthedWorkersRoute: typeof AuthedWorkersRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
   AuthedOrdersNewRoute: typeof AuthedOrdersNewRoute
+  AuthedProductsIngredientsRoute: typeof AuthedProductsIngredientsRoute
   AuthedOrdersIndexRoute: typeof AuthedOrdersIndexRoute
+  AuthedProductsIndexRoute: typeof AuthedProductsIndexRoute
+  AuthedProductsCombosComboIdRoute: typeof AuthedProductsCombosComboIdRoute
+  AuthedProductsCombosNewRoute: typeof AuthedProductsCombosNewRoute
+  AuthedProductsCombosIndexRoute: typeof AuthedProductsCombosIndexRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
@@ -299,12 +382,16 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedInventoryRoute: AuthedInventoryRoute,
   AuthedMembersRoute: AuthedMembersRoute,
   AuthedPlansRoute: AuthedPlansRoute,
-  AuthedProductsRoute: AuthedProductsRoute,
   AuthedTransactionsRoute: AuthedTransactionsRoute,
   AuthedWorkersRoute: AuthedWorkersRoute,
   AuthedIndexRoute: AuthedIndexRoute,
   AuthedOrdersNewRoute: AuthedOrdersNewRoute,
+  AuthedProductsIngredientsRoute: AuthedProductsIngredientsRoute,
   AuthedOrdersIndexRoute: AuthedOrdersIndexRoute,
+  AuthedProductsIndexRoute: AuthedProductsIndexRoute,
+  AuthedProductsCombosComboIdRoute: AuthedProductsCombosComboIdRoute,
+  AuthedProductsCombosNewRoute: AuthedProductsCombosNewRoute,
+  AuthedProductsCombosIndexRoute: AuthedProductsCombosIndexRoute,
 }
 
 const AuthedRouteWithChildren =
