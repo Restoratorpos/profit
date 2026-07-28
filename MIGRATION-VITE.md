@@ -100,8 +100,33 @@ The alternative — a Vite-based *framework* (React Router 7 framework mode or
 TanStack Start) — would preserve SSR and give a near 1:1 mapping from server
 components → loaders and server actions → actions, for materially less porting
 work. It was **considered and rejected**: it keeps a Node server in the
-deployment, which is most of what this migration exists to shed. Revisit only if
-SSR becomes a hard requirement.
+deployment, which is most of what this migration exists to shed.
+
+**Re-raised and rejected again on 2026-07-29**, specifically for TanStack Start
+(stable v1.0 since March 2026, and the router here is already TanStack). The
+routes would carry over nearly unchanged, and SSR would let the server read the
+httpOnly refresh cookie directly — no boot round trip, no sign-in flash.
+
+The reason it still loses: Start cannot *replace* apps/backend. Hono owns the
+database, the 90 endpoints, the tenant scoping and the Hikvision device
+integration. So Start would sit in front of Hono as a Node BFF — structurally
+the same architecture as the `apps/app` this migration exists to delete, and a
+second deployable service rather than none. Revisit only if SSR becomes a hard
+requirement, or if the intent changes to porting the backend into Start too.
+
+### Auth stays hand-rolled — Better Auth considered 2026-07-29
+
+Better Auth is MIT, free, and genuinely good. Rejected here because of the
+identity store, not the library: it wants its own `user`/`session`/`account`
+tables, while identity lives in a pre-existing `workers` row in a **shared
+remote MySQL** (~30 other databases on the host) with no drizzle baseline and a
+destructive `db:push`. Adopting it means a custom adapter onto `workers` plus
+redoing Phases 1 and 3 — which are built, tested and working — against a live
+database.
+
+Worth revisiting only when something it provides is actually needed (2FA for
+owners, passkeys on the terminal, social login), and then for those features
+rather than as a replacement for phone+password on `workers`.
 
 ## Strategy: two apps side by side
 
