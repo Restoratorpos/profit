@@ -8,7 +8,7 @@ Written 2026-07-28.
 | 1 — backend per-user auth | **done** — shipped as `requireCaller` |
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
 | 3 — SPA auth | **done** — sign-in, guards, refresh cookie, TanStack Router |
-| 4 — 9 feature verticals | not started — **unblocked** |
+| 4 — 9 feature verticals | **1 of 9** — `plans` done; it is the reference |
 | 5 — cutover, delete `apps/app` | not started |
 
 ## The headline
@@ -300,10 +300,14 @@ The translation is highly regular. Per vertical:
 `revalidatePath` → `invalidateQueries` is a genuine 1:1; the 10 files using it
 translate directly.
 
+The layout and the full porting recipe live in `apps/web/.claude/CLAUDE.md`.
+`features/plans` is the reference implementation; `__tests__/plans.test.tsx` is
+the reference test.
+
 Suggested order — smallest complete vertical first to validate the pattern, then
 by size:
 
-1. `plans` (9 endpoints) — the pattern proof
+1. `plans` (9 endpoints) — **done**, the pattern proof
 2. `transactions` (6)
 3. `members` (12)
 4. `orders` (6)
