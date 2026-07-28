@@ -14,11 +14,13 @@ import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedAttendanceRouteImport } from './routes/_authed/attendance'
 import { Route as AuthedDevicesRouteImport } from './routes/_authed/devices'
-import { Route as AuthedInventoryRouteImport } from './routes/_authed/inventory'
 import { Route as AuthedMembersRouteImport } from './routes/_authed/members'
 import { Route as AuthedPlansRouteImport } from './routes/_authed/plans'
 import { Route as AuthedTransactionsRouteImport } from './routes/_authed/transactions'
 import { Route as AuthedWorkersRouteImport } from './routes/_authed/workers'
+import { Route as AuthedInventoryIndexRouteImport } from './routes/_authed/inventory.index'
+import { Route as AuthedInventoryHistoryRouteImport } from './routes/_authed/inventory.history'
+import { Route as AuthedInventorySuppliersRouteImport } from './routes/_authed/inventory.suppliers'
 import { Route as AuthedOrdersIndexRouteImport } from './routes/_authed/orders.index'
 import { Route as AuthedOrdersNewRouteImport } from './routes/_authed/orders.new'
 import { Route as AuthedProductsIndexRouteImport } from './routes/_authed/products.index'
@@ -51,11 +53,6 @@ const AuthedDevicesRoute = AuthedDevicesRouteImport.update({
   path: '/devices',
   getParentRoute: () => AuthedRoute,
 } as any)
-const AuthedInventoryRoute = AuthedInventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
-  getParentRoute: () => AuthedRoute,
-} as any)
 const AuthedMembersRoute = AuthedMembersRouteImport.update({
   id: '/members',
   path: '/members',
@@ -76,6 +73,22 @@ const AuthedWorkersRoute = AuthedWorkersRouteImport.update({
   path: '/workers',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedInventoryIndexRoute = AuthedInventoryIndexRouteImport.update({
+  id: '/inventory/',
+  path: '/inventory/',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedInventoryHistoryRoute = AuthedInventoryHistoryRouteImport.update({
+  id: '/inventory/history',
+  path: '/inventory/history',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedInventorySuppliersRoute =
+  AuthedInventorySuppliersRouteImport.update({
+    id: '/inventory/suppliers',
+    path: '/inventory/suppliers',
+    getParentRoute: () => AuthedRoute,
+  } as any)
 const AuthedOrdersIndexRoute = AuthedOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -120,13 +133,15 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/attendance': typeof AuthedAttendanceRoute
   '/devices': typeof AuthedDevicesRoute
-  '/inventory': typeof AuthedInventoryRoute
   '/members': typeof AuthedMembersRoute
   '/plans': typeof AuthedPlansRoute
   '/transactions': typeof AuthedTransactionsRoute
   '/workers': typeof AuthedWorkersRoute
+  '/inventory/history': typeof AuthedInventoryHistoryRoute
+  '/inventory/suppliers': typeof AuthedInventorySuppliersRoute
   '/orders/new': typeof AuthedOrdersNewRoute
   '/products/ingredients': typeof AuthedProductsIngredientsRoute
+  '/inventory/': typeof AuthedInventoryIndexRoute
   '/orders/': typeof AuthedOrdersIndexRoute
   '/products/': typeof AuthedProductsIndexRoute
   '/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
@@ -137,14 +152,16 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/attendance': typeof AuthedAttendanceRoute
   '/devices': typeof AuthedDevicesRoute
-  '/inventory': typeof AuthedInventoryRoute
   '/members': typeof AuthedMembersRoute
   '/plans': typeof AuthedPlansRoute
   '/transactions': typeof AuthedTransactionsRoute
   '/workers': typeof AuthedWorkersRoute
   '/': typeof AuthedIndexRoute
+  '/inventory/history': typeof AuthedInventoryHistoryRoute
+  '/inventory/suppliers': typeof AuthedInventorySuppliersRoute
   '/orders/new': typeof AuthedOrdersNewRoute
   '/products/ingredients': typeof AuthedProductsIngredientsRoute
+  '/inventory': typeof AuthedInventoryIndexRoute
   '/orders': typeof AuthedOrdersIndexRoute
   '/products': typeof AuthedProductsIndexRoute
   '/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
@@ -157,14 +174,16 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/_authed/attendance': typeof AuthedAttendanceRoute
   '/_authed/devices': typeof AuthedDevicesRoute
-  '/_authed/inventory': typeof AuthedInventoryRoute
   '/_authed/members': typeof AuthedMembersRoute
   '/_authed/plans': typeof AuthedPlansRoute
   '/_authed/transactions': typeof AuthedTransactionsRoute
   '/_authed/workers': typeof AuthedWorkersRoute
   '/_authed/': typeof AuthedIndexRoute
+  '/_authed/inventory/history': typeof AuthedInventoryHistoryRoute
+  '/_authed/inventory/suppliers': typeof AuthedInventorySuppliersRoute
   '/_authed/orders/new': typeof AuthedOrdersNewRoute
   '/_authed/products/ingredients': typeof AuthedProductsIngredientsRoute
+  '/_authed/inventory/': typeof AuthedInventoryIndexRoute
   '/_authed/orders/': typeof AuthedOrdersIndexRoute
   '/_authed/products/': typeof AuthedProductsIndexRoute
   '/_authed/products/combos/$comboId': typeof AuthedProductsCombosComboIdRoute
@@ -178,13 +197,15 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/attendance'
     | '/devices'
-    | '/inventory'
     | '/members'
     | '/plans'
     | '/transactions'
     | '/workers'
+    | '/inventory/history'
+    | '/inventory/suppliers'
     | '/orders/new'
     | '/products/ingredients'
+    | '/inventory/'
     | '/orders/'
     | '/products/'
     | '/products/combos/$comboId'
@@ -195,14 +216,16 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/attendance'
     | '/devices'
-    | '/inventory'
     | '/members'
     | '/plans'
     | '/transactions'
     | '/workers'
     | '/'
+    | '/inventory/history'
+    | '/inventory/suppliers'
     | '/orders/new'
     | '/products/ingredients'
+    | '/inventory'
     | '/orders'
     | '/products'
     | '/products/combos/$comboId'
@@ -214,14 +237,16 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/_authed/attendance'
     | '/_authed/devices'
-    | '/_authed/inventory'
     | '/_authed/members'
     | '/_authed/plans'
     | '/_authed/transactions'
     | '/_authed/workers'
     | '/_authed/'
+    | '/_authed/inventory/history'
+    | '/_authed/inventory/suppliers'
     | '/_authed/orders/new'
     | '/_authed/products/ingredients'
+    | '/_authed/inventory/'
     | '/_authed/orders/'
     | '/_authed/products/'
     | '/_authed/products/combos/$comboId'
@@ -271,13 +296,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedDevicesRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/inventory': {
-      id: '/_authed/inventory'
-      path: '/inventory'
-      fullPath: '/inventory'
-      preLoaderRoute: typeof AuthedInventoryRouteImport
-      parentRoute: typeof AuthedRoute
-    }
     '/_authed/members': {
       id: '/_authed/members'
       path: '/members'
@@ -304,6 +322,27 @@ declare module '@tanstack/react-router' {
       path: '/workers'
       fullPath: '/workers'
       preLoaderRoute: typeof AuthedWorkersRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/inventory/': {
+      id: '/_authed/inventory/'
+      path: '/inventory'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AuthedInventoryIndexRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/inventory/history': {
+      id: '/_authed/inventory/history'
+      path: '/inventory/history'
+      fullPath: '/inventory/history'
+      preLoaderRoute: typeof AuthedInventoryHistoryRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/inventory/suppliers': {
+      id: '/_authed/inventory/suppliers'
+      path: '/inventory/suppliers'
+      fullPath: '/inventory/suppliers'
+      preLoaderRoute: typeof AuthedInventorySuppliersRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/orders/': {
@@ -361,14 +400,16 @@ declare module '@tanstack/react-router' {
 interface AuthedRouteChildren {
   AuthedAttendanceRoute: typeof AuthedAttendanceRoute
   AuthedDevicesRoute: typeof AuthedDevicesRoute
-  AuthedInventoryRoute: typeof AuthedInventoryRoute
   AuthedMembersRoute: typeof AuthedMembersRoute
   AuthedPlansRoute: typeof AuthedPlansRoute
   AuthedTransactionsRoute: typeof AuthedTransactionsRoute
   AuthedWorkersRoute: typeof AuthedWorkersRoute
   AuthedIndexRoute: typeof AuthedIndexRoute
+  AuthedInventoryHistoryRoute: typeof AuthedInventoryHistoryRoute
+  AuthedInventorySuppliersRoute: typeof AuthedInventorySuppliersRoute
   AuthedOrdersNewRoute: typeof AuthedOrdersNewRoute
   AuthedProductsIngredientsRoute: typeof AuthedProductsIngredientsRoute
+  AuthedInventoryIndexRoute: typeof AuthedInventoryIndexRoute
   AuthedOrdersIndexRoute: typeof AuthedOrdersIndexRoute
   AuthedProductsIndexRoute: typeof AuthedProductsIndexRoute
   AuthedProductsCombosComboIdRoute: typeof AuthedProductsCombosComboIdRoute
@@ -379,14 +420,16 @@ interface AuthedRouteChildren {
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAttendanceRoute: AuthedAttendanceRoute,
   AuthedDevicesRoute: AuthedDevicesRoute,
-  AuthedInventoryRoute: AuthedInventoryRoute,
   AuthedMembersRoute: AuthedMembersRoute,
   AuthedPlansRoute: AuthedPlansRoute,
   AuthedTransactionsRoute: AuthedTransactionsRoute,
   AuthedWorkersRoute: AuthedWorkersRoute,
   AuthedIndexRoute: AuthedIndexRoute,
+  AuthedInventoryHistoryRoute: AuthedInventoryHistoryRoute,
+  AuthedInventorySuppliersRoute: AuthedInventorySuppliersRoute,
   AuthedOrdersNewRoute: AuthedOrdersNewRoute,
   AuthedProductsIngredientsRoute: AuthedProductsIngredientsRoute,
+  AuthedInventoryIndexRoute: AuthedInventoryIndexRoute,
   AuthedOrdersIndexRoute: AuthedOrdersIndexRoute,
   AuthedProductsIndexRoute: AuthedProductsIndexRoute,
   AuthedProductsCombosComboIdRoute: AuthedProductsCombosComboIdRoute,
