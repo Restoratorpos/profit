@@ -1,4 +1,5 @@
 import { Badge } from "@repo/design-system/components/ui/badge";
+import { Button } from "@repo/design-system/components/ui/button";
 import {
   Table,
   TableBody,
@@ -84,16 +85,17 @@ export const StockTable = ({
                 {/* The row is the control that opens the drawer, so the name is
                     the focusable thing inside it — a whole <tr> cannot take
                     focus, and the keyboard must reach this somehow. */}
-                <button
-                  className="truncate text-left font-medium hover:underline"
+                <Button
+                  className="h-auto justify-start truncate p-0 font-medium hover:underline"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpen(item);
                   }}
                   type="button"
+                  variant="link"
                 >
                   {item.name}
-                </button>
+                </Button>
               </TableCell>
               <TableCell className="text-right font-medium tabular-nums">
                 {formatMoney(item.price)}

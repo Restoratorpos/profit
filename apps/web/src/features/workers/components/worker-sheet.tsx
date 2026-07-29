@@ -1,4 +1,5 @@
 import { Button } from "@repo/design-system/components/ui/button";
+import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -22,6 +23,7 @@ import {
   SheetTitle,
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { TimePicker } from "@repo/design-system/components/ui/time-picker";
 import { cn } from "@repo/design-system/lib/utils";
 import { UserPlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -281,7 +283,7 @@ export const WorkerSheet = ({
               {nameError ? <FieldError>{nameError}</FieldError> : null}
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="worker-phone">
                   {messages["workers.fieldPhone"]}
@@ -369,7 +371,7 @@ export const WorkerSheet = ({
               </div>
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="worker-salary">{salaryLabel}</FieldLabel>
                 <Input
@@ -390,27 +392,25 @@ export const WorkerSheet = ({
                 <FieldLabel htmlFor="worker-hired">
                   {messages["workers.hireDate"]}
                 </FieldLabel>
-                <Input
+                <DatePicker
                   defaultValue={worker?.hiredAt?.slice(0, 10) ?? ""}
                   disabled={isPending}
                   id="worker-hired"
                   name="hiredAt"
-                  type="date"
                 />
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="worker-shift-start">
                   {messages["workers.shiftStart"]}
                 </FieldLabel>
-                <Input
+                <TimePicker
                   defaultValue={worker?.shiftStart ?? "09:00"}
                   disabled={isPending}
                   id="worker-shift-start"
                   name="shiftStart"
-                  type="time"
                 />
               </Field>
 
@@ -418,12 +418,11 @@ export const WorkerSheet = ({
                 <FieldLabel htmlFor="worker-shift-end">
                   {messages["workers.shiftEnd"]}
                 </FieldLabel>
-                <Input
+                <TimePicker
                   defaultValue={worker?.shiftEnd ?? "18:00"}
                   disabled={isPending}
                   id="worker-shift-end"
                   name="shiftEnd"
-                  type="time"
                 />
               </Field>
             </div>

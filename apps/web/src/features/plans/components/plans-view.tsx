@@ -167,7 +167,7 @@ export const PlansView = ({
     plan.duration ? `${plan.duration} ${messages["plans.days"]}` : "—";
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-semibold text-2xl tracking-tight">
           {messages["nav.plans"]}

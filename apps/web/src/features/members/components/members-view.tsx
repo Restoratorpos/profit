@@ -258,7 +258,7 @@ export const MembersView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-3">
         {/* The sidebar already says which page this is, so the heading only
             has to exist for a screen reader — on screen it was a second label

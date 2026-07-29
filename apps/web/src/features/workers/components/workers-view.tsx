@@ -1,6 +1,7 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
+import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -210,7 +211,7 @@ export const WorkersView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-3">
         {/* The sidebar already says which page this is, so the heading only has
             to exist for a screen reader. */}
@@ -302,21 +303,17 @@ export const WorkersView = ({
           row that asked for them rather than holding space all the time. */}
       {preset === "custom" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            className="rounded-lg border bg-transparent px-3 py-2 text-sm"
-            onChange={(event) =>
-              pushRange("custom", { from: event.target.value, to })
-            }
-            type="date"
+          <DatePicker
+            aria-label={messages["workers.rangeLabel"]}
+            className="w-full sm:w-44"
+            onChange={(next) => pushRange("custom", { from: next, to })}
             value={from}
           />
-          <span className="text-muted-foreground">—</span>
-          <input
-            className="rounded-lg border bg-transparent px-3 py-2 text-sm"
-            onChange={(event) =>
-              pushRange("custom", { from, to: event.target.value })
-            }
-            type="date"
+          <span className="hidden text-muted-foreground sm:inline">—</span>
+          <DatePicker
+            aria-label={messages["workers.rangeLabel"]}
+            className="w-full sm:w-44"
+            onChange={(next) => pushRange("custom", { from, to: next })}
             value={to}
           />
         </div>
@@ -366,10 +363,11 @@ export const WorkersView = ({
                 page.rows.map((worker) => (
                   <TableRow key={worker.id}>
                     <TableCell>
-                      <button
-                        className="flex items-center gap-2 text-left font-medium hover:underline"
+                      <Button
+                        className="h-auto justify-start gap-2 p-0 text-left font-medium hover:underline"
                         onClick={() => setDetail(worker)}
                         type="button"
+                        variant="link"
                       >
                         {worker.onShiftNow ? (
                           <span
@@ -379,7 +377,7 @@ export const WorkersView = ({
                           />
                         ) : null}
                         {worker.name}
-                      </button>
+                      </Button>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">

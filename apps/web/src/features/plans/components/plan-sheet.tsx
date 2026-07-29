@@ -232,7 +232,7 @@ const PricingFields = ({
   messages: Messages;
   price: string | null;
 }) => (
-  <div className="grid grid-cols-2 gap-3">
+  <div className="grid gap-3 sm:grid-cols-2">
     <Field data-invalid={Boolean(errors.price) || undefined}>
       <FieldLabel htmlFor="plan-price">
         {billingType === "recurring"
@@ -291,7 +291,7 @@ const ResourceFields = ({
   trainerId: string;
   trainers: readonly NamedOption[];
 }) => (
-  <div className="grid grid-cols-2 gap-3">
+  <div className="grid gap-3 sm:grid-cols-2">
     <Field>
       <FieldLabel htmlFor="plan-trainer">
         {messages["plans.fieldTrainer"]}
@@ -380,7 +380,7 @@ const AccessFields = ({
       />
     </Field>
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       <TimeSelect
         disabled={disabled}
         hour={from[0]}

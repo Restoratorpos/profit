@@ -111,7 +111,7 @@ export const HistoryView = ({ messages, movements }: HistoryViewProperties) => {
   }, [filter, movements, query]);
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button asChild size="icon" variant="ghost">

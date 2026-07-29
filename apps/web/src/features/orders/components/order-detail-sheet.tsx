@@ -266,7 +266,7 @@ const PaymentPanel = ({
       {error ? <FieldError>{error}</FieldError> : null}
     </Field>
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       <Button
         disabled={disabled}
         onClick={() => onAmount(toAmount((remaining / 2).toFixed(2)))}

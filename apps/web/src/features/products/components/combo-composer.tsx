@@ -593,7 +593,7 @@ export const ComboComposer = ({
   ];
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       <div className="flex items-center gap-3">
         <Button
           aria-label={messages["common.cancel"]}

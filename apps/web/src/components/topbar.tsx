@@ -21,19 +21,32 @@ export const Topbar = ({
   locale,
   messages,
 }: TopbarProperties) => (
-  <header className="sticky top-0 z-10 flex h-18 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+  /*
+   * `shrink-0`, not `sticky`. The shell pins the viewport and the content below
+   * is the only scroll container, so this header is simply always there — it
+   * never has to chase a scrolling document.
+   */
+  <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background px-3 sm:h-18 sm:gap-3 sm:px-4">
     <SidebarTrigger />
-    <Separator className="mr-1 h-8" orientation="vertical" />
-    <BranchSwitcher
-      activeBranchId={activeBranchId}
-      branches={branches}
-      messages={messages}
-    />
+    {/* Hidden on the narrowest screens: with the rail collapsed to an icon the
+        trigger already reads as the edge of the nav, and the rule is one more
+        thing competing for a 320px row. */}
+    <Separator className="mr-1 hidden h-8 sm:block" orientation="vertical" />
 
-    <div className="ml-auto flex items-center gap-2">
+    {/* min-w-0 lets the branch name truncate instead of pushing the controls on
+        the right off the screen. */}
+    <div className="min-w-0 flex-1">
+      <BranchSwitcher
+        activeBranchId={activeBranchId}
+        branches={branches}
+        messages={messages}
+      />
+    </div>
+
+    <div className="flex shrink-0 items-center gap-1 sm:gap-2">
       <LanguageSwitcher locale={locale} messages={messages} />
       <ThemeSwitcher messages={messages} />
-      <Separator className="mx-1 h-8" orientation="vertical" />
+      <Separator className="mx-1 hidden h-8 sm:block" orientation="vertical" />
       <UserMenu messages={messages} />
     </div>
   </header>

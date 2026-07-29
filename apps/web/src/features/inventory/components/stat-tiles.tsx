@@ -1,3 +1,4 @@
+import { Button } from "@repo/design-system/components/ui/button";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   CircleAlertIcon,
@@ -83,16 +84,16 @@ export const StatTiles = ({
         return (
           // A tile is a filter, so it is a button — not a card with a click
           // handler bolted on that the keyboard can never reach.
-          <button
+          <Button
             aria-pressed={isSelected}
             className={cn(
-              "flex items-center gap-3 rounded-xl border p-4 text-left transition-colors",
-              "hover:bg-muted/50",
+              "h-auto flex-1 items-center justify-start gap-3 rounded-xl p-4 text-left",
               isSelected && "border-primary bg-muted/50"
             )}
             key={tile.key}
             onClick={() => onSelect(tile.key)}
             type="button"
+            variant="outline"
           >
             <span
               className={cn(
@@ -115,7 +116,7 @@ export const StatTiles = ({
                 {tile.value}
               </span>
             </span>
-          </button>
+          </Button>
         );
       })}
     </div>

@@ -9,6 +9,14 @@ import {
   SheetTitle,
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@repo/design-system/components/ui/table";
 import { CalendarIcon, ClockIcon, PhoneIcon } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
@@ -61,42 +69,40 @@ const AttendanceTable = ({
 
   return (
     <div className="overflow-hidden rounded-xl border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/40 text-muted-foreground text-xs uppercase tracking-wide">
-            <th className="px-3 py-2 text-left font-medium">
-              {messages["workers.colCheckIn"]}
-            </th>
-            <th className="px-3 py-2 text-left font-medium">
-              {messages["workers.colCheckOut"]}
-            </th>
-            <th className="px-3 py-2 text-right font-medium">
-              {messages["workers.colWorked"]}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail.sessions.map((session) => (
-            <tr className="border-b last:border-0" key={session.id}>
-              <td className="px-3 py-2 font-medium">
-                {formatStamp(session.checkIn, locale)}
-              </td>
-              <td className="px-3 py-2">
-                {session.open ? (
-                  <Badge className="border-transparent bg-primary/15 text-primary-accent">
-                    {messages["workers.onShift"]}
-                  </Badge>
-                ) : (
-                  formatStamp(session.checkOut, locale)
-                )}
-              </td>
-              <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
-                {formatHours(session.minutesWorked)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{messages["workers.colCheckIn"]}</TableHead>
+              <TableHead>{messages["workers.colCheckOut"]}</TableHead>
+              <TableHead className="text-right">
+                {messages["workers.colWorked"]}
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {detail.sessions.map((session) => (
+              <TableRow key={session.id}>
+                <TableCell className="font-medium">
+                  {formatStamp(session.checkIn, locale)}
+                </TableCell>
+                <TableCell>
+                  {session.open ? (
+                    <Badge className="border-transparent bg-primary/15 text-primary-accent">
+                      {messages["workers.onShift"]}
+                    </Badge>
+                  ) : (
+                    formatStamp(session.checkOut, locale)
+                  )}
+                </TableCell>
+                <TableCell className="text-right text-muted-foreground tabular-nums">
+                  {formatHours(session.minutesWorked)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 };
@@ -115,7 +121,9 @@ const DetailBody = ({
 
   return (
     <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-      <div className="grid grid-cols-3 gap-2">
+      {/* One column on a phone: the sheet is full-width there, and three cards
+          across 320px truncates every value it is meant to show. */}
+      <div className="grid gap-2 sm:grid-cols-3">
         <StatCard
           icon={ClockIcon}
           label={

@@ -1,7 +1,7 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
-import { Input } from "@repo/design-system/components/ui/input";
+import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   InputGroup,
   InputGroupAddon,
@@ -151,23 +151,21 @@ export const OrdersView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-1 flex-wrap items-center gap-2">
           <div className="flex items-center gap-2">
-            <Input
+            <DatePicker
               aria-label={messages["orders.rangeStart"]}
-              className="w-40"
-              onChange={(event) => editDates("from", event.target.value)}
-              type="date"
+              className="w-full sm:w-44"
+              onChange={(next) => editDates("from", next)}
               value={from}
             />
-            <span className="text-muted-foreground">—</span>
-            <Input
+            <span className="hidden text-muted-foreground sm:inline">—</span>
+            <DatePicker
               aria-label={messages["orders.rangeEnd"]}
-              className="w-40"
-              onChange={(event) => editDates("to", event.target.value)}
-              type="date"
+              className="w-full sm:w-44"
+              onChange={(next) => editDates("to", next)}
               value={to}
             />
           </div>

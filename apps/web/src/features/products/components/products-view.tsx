@@ -534,7 +534,7 @@ export const ProductsView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
       {/* The sidebar already says which page this is, so the heading is dead
           weight on screen — but a page still needs one to be navigable by
           heading, so it stays for screen readers rather than being deleted. */}

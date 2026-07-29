@@ -348,7 +348,7 @@ export const ProductSheet = ({
               value={name}
             />
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               {isRawMaterial ? null : (
                 <RequiredField
                   error={fieldErrors.price}
@@ -389,7 +389,7 @@ export const ProductSheet = ({
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               {isRawMaterial ? null : (
                 <UnitField
                   messages={messages}
@@ -448,7 +448,7 @@ export const ProductSheet = ({
             ) : null}
           </div>
 
-          <SheetFooter className="grid grid-cols-2 gap-2">
+          <SheetFooter className="grid gap-2 sm:grid-cols-2">
             <Button
               disabled={isPending}
               onClick={() => onOpenChange(false)}

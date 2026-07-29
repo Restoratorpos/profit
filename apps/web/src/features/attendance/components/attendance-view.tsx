@@ -1,5 +1,6 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Button } from "@repo/design-system/components/ui/button";
+import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Empty,
   EmptyDescription,
@@ -7,7 +8,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@repo/design-system/components/ui/empty";
-import { Input } from "@repo/design-system/components/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
@@ -201,7 +201,7 @@ export const AttendanceView = ({
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
       <h1 className="sr-only">{messages["attendance.title"]}</h1>
 
       <PendingQueue
@@ -222,25 +222,23 @@ export const AttendanceView = ({
         </p>
 
         <div className="flex items-center gap-2">
-          <Input
+          <DatePicker
             aria-label={messages["attendance.today"]}
-            className="w-40"
-            onChange={(event) => {
-              setFrom(event.target.value);
+            className="w-full sm:w-44"
+            onChange={(next) => {
+              setFrom(next);
               setPage(1);
             }}
-            type="date"
             value={from}
           />
-          <span className="text-muted-foreground">—</span>
-          <Input
+          <span className="hidden text-muted-foreground sm:inline">—</span>
+          <DatePicker
             aria-label={messages["attendance.month"]}
-            className="w-40"
-            onChange={(event) => {
-              setTo(event.target.value);
+            className="w-full sm:w-44"
+            onChange={(next) => {
+              setTo(next);
               setPage(1);
             }}
-            type="date"
             value={to}
           />
         </div>

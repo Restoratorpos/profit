@@ -35,14 +35,30 @@ export const AppLayout = () => {
   return (
     <SidebarProvider defaultOpen={sidebarOpen}>
       <AppSidebar messages={messages} />
-      <SidebarInset>
+      {/*
+       * The shell owns the viewport and never scrolls: `h-svh` plus
+       * `overflow-hidden` pins it, so the only thing that can move is the
+       * content area below. `svh` rather than `vh` because on a phone the
+       * browser chrome collapses as you scroll, and `vh` would leave the header
+       * hanging over content or a gap under the fold.
+       */}
+      <SidebarInset className="h-svh overflow-hidden">
         <Topbar
           activeBranchId={activeBranchId}
           branches={PLACEHOLDER_BRANCHES}
           locale={locale}
           messages={messages}
         />
-        <div className="flex flex-1 flex-col">
+        {/*
+         * The single scroll container. Every page renders inside this, so a long
+         * table scrolls under a header that stays put — rather than the whole
+         * document moving and the header having to chase it with `sticky`.
+         *
+         * `min-h-0` is load-bearing: a flex child defaults to `min-height:auto`,
+         * which refuses to shrink below its content, and the overflow would
+         * silently move to the body instead.
+         */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <Outlet />
         </div>
       </SidebarInset>

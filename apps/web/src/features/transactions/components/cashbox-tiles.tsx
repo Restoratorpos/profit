@@ -1,3 +1,4 @@
+import { Button } from "@repo/design-system/components/ui/button";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -62,11 +63,10 @@ export const CashboxTiles = ({
       const isSelected = selected === box;
 
       return (
-        <button
+        <Button
           aria-pressed={isSelected}
           className={cn(
-            "flex items-center gap-3 rounded-xl border p-4 text-left transition-colors",
-            "hover:bg-muted/50",
+            "h-auto flex-1 items-center justify-start gap-3 rounded-xl p-4 text-left",
             isSelected && "border-primary bg-muted/50"
           )}
           key={box}
@@ -74,6 +74,7 @@ export const CashboxTiles = ({
           // the only way back to the whole ledger is a control that isn't there.
           onClick={() => onSelect(isSelected ? null : box)}
           type="button"
+          variant="outline"
         >
           <span
             className={cn(
@@ -96,7 +97,7 @@ export const CashboxTiles = ({
               {formatBalance(balance)}
             </span>
           </span>
-        </button>
+        </Button>
       );
     })}
 

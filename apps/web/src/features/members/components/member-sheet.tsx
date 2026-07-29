@@ -1,4 +1,5 @@
 import { Button } from "@repo/design-system/components/ui/button";
+import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -213,7 +214,7 @@ const PersonFields = ({
       {errors.fullname ? <FieldError>{errors.fullname}</FieldError> : null}
     </Field>
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       <Field data-invalid={Boolean(errors.phone) || undefined}>
         <FieldLabel htmlFor="member-phone">
           <span className="text-destructive">*</span>{" "}
@@ -260,12 +261,11 @@ const PersonFields = ({
       <FieldLabel htmlFor="member-birthdate">
         {messages["members.fieldBirthdate"]}
       </FieldLabel>
-      <Input
+      <DatePicker
         defaultValue={member?.birthdate?.slice(0, 10) ?? ""}
         disabled={disabled}
         id="member-birthdate"
         name="birthdate"
-        type="date"
       />
     </Field>
 
@@ -362,7 +362,7 @@ const MembershipSection = ({
       {messages["members.sectionMembership"]}
     </h3>
 
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       <Field>
         <FieldLabel htmlFor="member-plan">
           {messages["members.fieldPlan"]}
@@ -388,11 +388,10 @@ const MembershipSection = ({
         <FieldLabel htmlFor="member-start">
           {messages["members.fieldStartDate"]}
         </FieldLabel>
-        <Input
+        <DatePicker
           disabled={disabled || planId === NO_PLAN}
           id="member-start"
-          onChange={(event) => onStartsAt(event.target.value)}
-          type="date"
+          onChange={onStartsAt}
           value={startsAt}
         />
       </Field>

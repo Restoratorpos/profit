@@ -139,7 +139,7 @@ export const SupplierSheet = ({
               />
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="supplier-type">
                   {messages["suppliers.fieldType"]}

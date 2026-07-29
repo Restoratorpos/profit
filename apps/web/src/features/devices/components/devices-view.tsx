@@ -156,7 +156,7 @@ export const DevicesView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="sr-only">{messages["devices.title"]}</h1>

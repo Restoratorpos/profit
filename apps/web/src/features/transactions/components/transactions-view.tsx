@@ -172,7 +172,7 @@ export const TransactionsView = ({
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-6">
+    <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
       <h1 className="sr-only">{messages["nav.transactions"]}</h1>
 
       <CashboxTiles

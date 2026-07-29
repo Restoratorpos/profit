@@ -743,7 +743,7 @@ export const OrderComposer = ({
   ];
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-6">
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
       {/* The title is read, not displayed. This screen is a till: the operator
           knows what they opened — the sidebar row they pressed is still lit —
           and a whole row spent saying so is a row of products they cannot see.
