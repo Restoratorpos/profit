@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@repo/design-system/components/ui/select";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -211,16 +212,6 @@ const ProductTile = ({
   );
 };
 
-/**
- * The picked option in a radio row. A tint alone reads as "slightly different
- * grey" on the desk monitor, so the choice also carries a ring and bolder text —
- * three signals, none of which is colour on its own. The hover colours are
- * restated because `outline` otherwise repaints the label with
- * `accent-foreground` on hover, which drops the green off the chosen option.
- */
-const SELECTED_OPTION =
-  "border-primary bg-primary/10 font-semibold text-primary-accent ring-2 ring-primary hover:bg-primary/15 hover:text-primary-accent";
-
 type QtyMode = "kg" | "gram" | "price";
 
 const QTY_SUFFIXES: Record<QtyMode, string> = {
@@ -344,7 +335,7 @@ const QuantityModal = ({
           {modes.map((m) => (
             <Button
               aria-checked={mode === m}
-              className={cn(mode === m && SELECTED_OPTION)}
+              className={cn(mode === m && SELECTED_FILL)}
               key={m}
               onClick={() => setMode(m)}
               role="radio"
@@ -685,7 +676,7 @@ export const ComboComposer = ({
               return (
                 <Button
                   aria-checked={active}
-                  className={cn("gap-2", active && SELECTED_OPTION)}
+                  className={cn("gap-2", active && SELECTED_FILL)}
                   key={side.value}
                   onClick={() => setComboType(side.value)}
                   role="radio"

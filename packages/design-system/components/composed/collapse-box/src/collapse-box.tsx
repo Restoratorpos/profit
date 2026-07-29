@@ -1,10 +1,10 @@
 "use client";
-import { cn } from "@repo/design-system/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@radix-ui/react-collapsible";
+import { cn } from "@repo/design-system/lib/utils";
 import { ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type React from "react";

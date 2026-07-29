@@ -24,6 +24,7 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { TimePicker } from "@repo/design-system/components/ui/time-picker";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { UserPlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -351,10 +352,7 @@ export const WorkerSheet = ({
                   return (
                     <Button
                       aria-checked={active}
-                      className={cn(
-                        active &&
-                          "border-primary bg-primary/10 text-primary-accent"
-                      )}
+                      className={cn(active && SELECTED_FILL)}
                       disabled={isPending}
                       key={type}
                       onClick={() => setSalaryType(type)}
@@ -437,11 +435,7 @@ export const WorkerSheet = ({
                     <Button
                       aria-checked={active}
                       aria-label={messages[labelKey]}
-                      className={cn(
-                        "min-w-14",
-                        active &&
-                          "border-primary bg-primary/10 text-primary-accent"
-                      )}
+                      className={cn("min-w-14", active && SELECTED_FILL)}
                       disabled={isPending}
                       key={day}
                       onClick={() => toggleDay(day)}

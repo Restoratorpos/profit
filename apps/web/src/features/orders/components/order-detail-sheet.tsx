@@ -16,6 +16,7 @@ import {
   SheetTitle,
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -232,10 +233,7 @@ const PaymentPanel = ({
         return (
           <Button
             aria-checked={active}
-            className={cn(
-              "h-16 flex-col gap-1",
-              active && "border-primary bg-primary/10 text-primary-accent"
-            )}
+            className={cn("h-16 flex-col gap-1", active && SELECTED_FILL)}
             disabled={disabled}
             key={option.value}
             onClick={() => onPaymentType(option.value)}

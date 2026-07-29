@@ -43,11 +43,12 @@ import {
   UserRoundIcon,
   WalletIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { PAGE_SIZES } from "@/components/use-pagination";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useSetWorkerActive, useWorkersPage } from "../api";
 import {
   DEFAULT_WORKER_QUERY,
@@ -156,15 +157,7 @@ export const WorkersView = ({
    * The `cancelled` flag the old effect carried is gone: a slow reply for a
    * stale query belongs to a different cache key and cannot land here.
    */
-  const [debounced, setDebounced] = useState<WorkerQuery>(DEFAULT_WORKER_QUERY);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(request), 250);
-
-    return () => clearTimeout(timer);
-  }, [request]);
-
-  const workersPage = useWorkersPage(debounced, { from, to });
+  const workersPage = useWorkersPage(useDebouncedValue(request), { from, to });
   const isNavigating = workersPage.isFetching;
   const page = workersPage.data ?? initial;
 

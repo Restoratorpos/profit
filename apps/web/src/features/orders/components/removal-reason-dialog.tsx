@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@repo/design-system/components/ui/dialog";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { useState } from "react";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -120,8 +121,7 @@ export const RemovalReasonDialog = ({
                 aria-checked={active}
                 className={cn(
                   "h-11 justify-start rounded-xl font-normal",
-                  active &&
-                    "border-primary bg-primary/10 font-medium text-primary-accent"
+                  active && SELECTED_FILL
                 )}
                 key={option.value}
                 onClick={() => setReason(option.value)}
@@ -150,11 +150,7 @@ export const RemovalReasonDialog = ({
               return (
                 <Button
                   aria-checked={active}
-                  className={cn(
-                    "h-11 rounded-xl",
-                    active &&
-                      "border-primary bg-primary/10 font-semibold text-primary-accent"
-                  )}
+                  className={cn("h-11 rounded-xl", active && SELECTED_FILL)}
                   key={option.value}
                   onClick={() => setDisposition(option.value)}
                   role="radio"

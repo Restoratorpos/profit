@@ -1,5 +1,6 @@
 "use client";
 
+import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
   Collapsible,
@@ -7,7 +8,6 @@ import {
   CollapsibleTrigger,
 } from "@repo/design-system/components/ui/collapsible";
 import { cn } from "@repo/design-system/lib/utils";
-import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import {
   AlertTriangleIcon,
   CheckIcon,

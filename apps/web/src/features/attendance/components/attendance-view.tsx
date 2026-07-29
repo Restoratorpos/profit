@@ -34,6 +34,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IdCode } from "@/components/id-code";
 import type { MemberListItem } from "@/features/members/types";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useAttendanceSessions,
   useDecidePending,
@@ -99,15 +100,7 @@ export const AttendanceView = ({
     [from, page, pageSize, query, to]
   );
 
-  const [debounced, setDebounced] = useState(filters);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(filters), 250);
-
-    return () => clearTimeout(timer);
-  }, [filters]);
-
-  const sessions = useAttendanceSessions(debounced);
+  const sessions = useAttendanceSessions(useDebouncedValue(filters));
 
   // Two different counts: `total` is members (what the pager walks through),
   // `visits` is entries (what the header says out loud).

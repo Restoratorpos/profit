@@ -1,12 +1,12 @@
 "use client";
 
+import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@repo/design-system/components/ui/collapsible";
 import { cn } from "@repo/design-system/lib/utils";
-import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";

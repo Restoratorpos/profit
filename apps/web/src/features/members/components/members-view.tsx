@@ -42,12 +42,13 @@ import {
   UserPlusIcon,
   XIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import { IdCode } from "@/components/id-code";
 import { PAGE_SIZES } from "@/components/use-pagination";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useDeleteMember, useMembersPage, useSetMemberActive } from "../api";
 import {
   DEBT_FILTERS,
@@ -178,15 +179,7 @@ export const MembersView = ({
    * different cache key. `keepPreviousData` on the query is what stops the
    * table blanking between keystrokes.
    */
-  const [debounced, setDebounced] = useState<MemberQuery>(DEFAULT_MEMBER_QUERY);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(request), 250);
-
-    return () => clearTimeout(timer);
-  }, [request]);
-
-  const membersPage = useMembersPage(debounced);
+  const membersPage = useMembersPage(useDebouncedValue(request));
   const deleteMember = useDeleteMember();
   const setMemberActive = useSetMemberActive();
 

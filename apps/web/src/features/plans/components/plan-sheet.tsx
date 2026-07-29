@@ -24,6 +24,7 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { Textarea } from "@repo/design-system/components/ui/textarea";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { TagIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
@@ -199,14 +200,16 @@ const BillingToggle = ({
             aria-checked={active}
             className={cn(
               "h-8 font-medium",
-              !active && "text-muted-foreground hover:bg-background/60"
+              active
+                ? SELECTED_FILL
+                : "text-muted-foreground hover:bg-background/60"
             )}
             disabled={disabled}
             key={option}
             onClick={() => onChange(option)}
             role="radio"
             type="button"
-            variant={active ? "default" : "ghost"}
+            variant="ghost"
           >
             {label}
           </Button>

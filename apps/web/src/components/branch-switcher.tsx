@@ -7,7 +7,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@repo/design-system/components/ui/dropdown-menu";
-import { CheckIcon, ChevronsUpDownIcon } from "lucide-react";
+import { cn } from "@repo/design-system/lib/utils";
+import { CheckIcon, ChevronsUpDownIcon, StoreIcon } from "lucide-react";
 import { useState } from "react";
 import { BRANCH_COOKIE, type BranchOption } from "@/lib/branches";
 import { setDeviceCookie } from "@/lib/device-prefs";
@@ -51,29 +52,72 @@ export const BranchSwitcher = ({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/*
+         * Two lines rather than one: which branch a terminal is pointed at
+         * decides what every list on the screen contains, so it is worth the
+         * row. The label above the name is what makes it a statement of where
+         * you are rather than an unexplained word in the header.
+         */}
         <Button
-          className="h-8 gap-1.5 px-2 font-normal"
-          size="sm"
+          className="h-auto max-w-full gap-2 px-2 py-1.5 font-normal"
           variant="ghost"
         >
-          <span className="max-w-[10rem] truncate">{active.name}</span>
-          <ChevronsUpDownIcon className="size-3.5 text-muted-foreground" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary-accent">
+            <StoreIcon className="size-4" />
+          </span>
+          <span className="flex min-w-0 flex-col items-start leading-tight">
+            <span className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">
+              {messages["topbar.branch"]}
+            </span>
+            <span className="max-w-[9rem] truncate font-medium text-sm sm:max-w-[14rem]">
+              {active.name}
+            </span>
+          </span>
+          <ChevronsUpDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-52">
-        <DropdownMenuLabel>{messages["topbar.branch"]}</DropdownMenuLabel>
+
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="text-muted-foreground text-xs uppercase tracking-wide">
+          {messages["topbar.branch"]}
+        </DropdownMenuLabel>
         <DropdownMenuGroup>
-          {branches.map((branch) => (
-            <DropdownMenuItem
-              key={branch.id}
-              onSelect={() => handleSelect(branch.id)}
-            >
-              <span className="flex-1 truncate">{branch.name}</span>
-              {branch.id === active.id ? (
-                <CheckIcon className="size-4 text-primary-accent" />
-              ) : null}
-            </DropdownMenuItem>
-          ))}
+          {branches.map((branch) => {
+            const isCurrent = branch.id === active.id;
+
+            return (
+              <DropdownMenuItem
+                className="gap-2 py-2"
+                key={branch.id}
+                onSelect={() => handleSelect(branch.id)}
+              >
+                {/*
+                 * The tile carries the state, not the row background: Radix
+                 * already owns the row's background for keyboard highlight, and
+                 * a second background there would make "hovered" and "current"
+                 * the same picture.
+                 */}
+                <span
+                  className={cn(
+                    "flex size-7 shrink-0 items-center justify-center rounded-md",
+                    isCurrent
+                      ? "bg-selected text-selected-foreground"
+                      : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  <StoreIcon className="size-3.5" />
+                </span>
+                <span
+                  className={cn("flex-1 truncate", isCurrent && "font-medium")}
+                >
+                  {branch.name}
+                </span>
+                {isCurrent ? (
+                  <CheckIcon className="size-4 shrink-0 text-primary-accent" />
+                ) : null}
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

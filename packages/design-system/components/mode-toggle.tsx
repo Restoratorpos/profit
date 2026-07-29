@@ -20,7 +20,7 @@ export const ModeToggle = () => {
           {/* Both icons are always mounted and cross-fade on the `dark` class,
               so the trigger renders identically on server and client — reading
               the resolved theme here would hydration-mismatch. */}
-          <SunIcon className="dark:-rotate-90 rotate-0 scale-100 transition-all dark:scale-0" />
+          <SunIcon className="rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <MoonIcon className="absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Toggle theme</span>
         </Button>

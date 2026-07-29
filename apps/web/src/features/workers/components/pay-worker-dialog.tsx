@@ -25,6 +25,7 @@ import {
 } from "@repo/design-system/components/ui/select";
 import { Separator } from "@repo/design-system/components/ui/separator";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { SELECTED_FILL } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -415,10 +416,7 @@ export const PayWorkerDialog = ({
                     return (
                       <Button
                         aria-checked={isActive}
-                        className={cn(
-                          isActive &&
-                            "border-primary bg-primary/10 text-primary-accent"
-                        )}
+                        className={cn(isActive && SELECTED_FILL)}
                         key={option.value}
                         onClick={() => setMethod(option.value)}
                         role="radio"
