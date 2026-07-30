@@ -32,7 +32,11 @@
     "parse5": "^7.2.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["bcrypt", "esbuild"]
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "electron",
+      "esbuild"
+    ]
   },
   "type": "module"
 }

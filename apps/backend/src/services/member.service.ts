@@ -12,6 +12,7 @@ import {
   orders,
   plans,
 } from "../db/schema.js";
+import { cappedDiscount, discountOf } from "../lib/discount.js";
 import {
   ConflictError,
   NotFoundError,
@@ -54,6 +55,12 @@ export interface MemberMembershipView {
    * package barely touched does not say which one the desk should chase.
    */
   debt: string;
+  /**
+   * Money taken off the plan's list price when this was sold, or null when it was
+   * sold at full price. `price + discount` is what the plan cost that day, which
+   * is why it is kept rather than derived — a plan's price is edited over time.
+   */
+  discount: string | null;
   endsAt: string | null;
   id: string;
   /** The plan's name. There is no category on `plans`, so this is the type. */
@@ -242,6 +249,7 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
       membershipId: memberships.membershipId,
       memberId: memberships.memberId,
       price: memberships.price,
+      discount: memberships.discount,
       startsAt: memberships.startsAt,
       endsAt: memberships.endsAt,
       remainingVisits: memberships.remainingVisits,
@@ -388,6 +396,7 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
       // Floored the same way the member-wide total is: a member who overpaid
       // one membership is not owed money by this screen.
       debt: toMoney(Math.max(price - paid, 0)),
+      discount: row.discount ? toMoney(toNumber(row.discount)) : null,
       endsAt: toIsoDate(row.endsAt),
       id: row.membershipId,
       name: row.planName ?? "",
@@ -654,17 +663,26 @@ const SETTLED_EPSILON = 0.005;
  *
  * `debt` and `free` take nothing and end the walk. The difference between them
  * is `charged`, which is what goes in `memberships.price` and is not always the
- * plan's list price: a comp is stored at zero and a discounted sale at what was
+ * plan's list price: a comp is stored at zero and a part-paid comp at what was
  * actually taken, because the member's debt is `price - SUM(paid)` and leaving
  * the list price on either would chase somebody forever for money nobody
  * intends to collect.
+ *
+ * A discount lowers the price before any of that happens, so every leg settles
+ * against the discounted figure and the debt is measured from it. It is passed in
+ * as money rather than a rate: `discountOf` has already resolved a percentage
+ * against this same list price, and re-deriving it here would be two places that
+ * could disagree about one number.
  */
 export const settleMembership = (
   listPrice: number,
-  legs: readonly MembershipPaymentLeg[]
-): { charged: number; rows: MembershipSettlementRow[] } => {
+  legs: readonly MembershipPaymentLeg[],
+  discount = 0
+): { charged: number; discount: number; rows: MembershipSettlementRow[] } => {
   const rows: MembershipSettlementRow[] = [];
-  let outstanding = listPrice;
+  const taken = cappedDiscount(listPrice, discount);
+  const netPrice = listPrice - taken;
+  let outstanding = netPrice;
   let isWaived = false;
 
   for (const leg of legs) {
@@ -686,7 +704,11 @@ export const settleMembership = (
     }
   }
 
-  return { charged: isWaived ? listPrice - outstanding : listPrice, rows };
+  return {
+    charged: isWaived ? netPrice - outstanding : netPrice,
+    discount: taken,
+    rows,
+  };
 };
 
 const sellMembership = async (
@@ -726,9 +748,13 @@ const sellMembership = async (
   const startsAt = toStartOfDay(sale.startsAt);
   const visits = plan.visitQty ?? 0;
 
-  const { charged, rows } = settleMembership(
-    Number(plan.price ?? 0),
-    sale.payments
+  const listPrice = Number(plan.price ?? 0);
+  const { charged, discount, rows } = settleMembership(
+    listPrice,
+    sale.payments,
+    // Resolved against the plan's own price, read from the row above — never
+    // against a figure the client worked out for itself.
+    discountOf(listPrice, sale.discount)
   );
 
   await tx.insert(memberships).values({
@@ -744,6 +770,9 @@ const sellMembership = async (
      * sale, what was actually charged is what they handed over.
      */
     price: charged.toFixed(2),
+    // Null rather than zero when nothing was taken off, so "was this discounted"
+    // is answerable without reading a discount of nothing as one.
+    discount: discount > 0 ? discount.toFixed(2) : null,
     startsAt,
     endsAt: plan.duration ? addDays(startsAt, plan.duration) : null,
     // 0 on the plan means unlimited, which is stored as "not counted".

@@ -308,8 +308,12 @@ export const OrdersView = ({
 
                 <div className="text-right">
                   {owes ? (
-                    <span className="font-bold text-destructive text-xl">
-                      {formatMoney(summary.remaining)}
+                    // The minus carries the meaning, not the colour: a wall of red
+                    // figures is the ordinary state of this screen — it lists
+                    // debtors — so red stopped marking anything out and only made
+                    // the number harder to read.
+                    <span className="font-bold text-xl tabular-nums">
+                      −{formatMoney(summary.remaining)}
                     </span>
                   ) : (
                     <Badge variant="secondary">

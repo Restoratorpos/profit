@@ -60,8 +60,16 @@ export const usePayMemberOrders = (userId: string) => {
   const settle = useSettleMemberOrders(userId);
 
   return useMutation({
-    mutationFn: (input: { amount: string; paymentType: OrderPaymentType }) =>
-      apiPost<MemberOrderDetail>(`/orders/member/${userId}/pay`, input),
+    mutationFn: (input: {
+      amount: string;
+      /**
+       * Forgiven off the balance before the payment lands — null when nothing is.
+       * A rate or a figure; the server resolves it against the balance it reads
+       * for itself, oldest order first.
+       */
+      discount: { kind: "amount" | "percent"; value: number } | null;
+      paymentType: OrderPaymentType;
+    }) => apiPost<MemberOrderDetail>(`/orders/member/${userId}/pay`, input),
     onSuccess: settle,
   });
 };
@@ -95,6 +103,12 @@ export const useDeleteMemberOrders = (userId: string) => {
 };
 
 export interface CreateOrderInput {
+  /**
+   * What the desk took off, as a rate or a figure — null for a full-price sale.
+   * The server resolves it against its own catalog prices, so the money this came
+   * to on screen is deliberately not sent.
+   */
+  discount: { kind: "amount" | "percent"; value: number } | null;
   /** Each item is a product or a combo — exactly one id, enforced server-side. */
   items: { comboId?: string; productId?: string; quantity: number }[];
   /**

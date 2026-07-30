@@ -346,7 +346,20 @@ export const memberships = mysqlTable(
     gymId: varchar("gym_id", { length: 20 }),
     memberId: varchar("member_id", { length: 20 }),
     planId: varchar("plan_id", { length: 20 }),
+    /**
+     * What the sale was **charged**, net of any discount — the member's debt is
+     * `price - SUM(income.amount)`, so this has to be the figure they owe rather
+     * than the plan's list price.
+     */
     price: decimal("price", { precision: 14, scale: 2 }),
+    /**
+     * How much was taken off the plan's list price, or null when nothing was.
+     *
+     * Kept as its own figure rather than inferred from `price` against the plan:
+     * a plan's price is edited over time, so "what did we give away" stops being
+     * answerable the moment somebody changes it. `list price = price + discount`.
+     */
+    discount: decimal("discount", { precision: 14, scale: 2 }),
     startsAt: datetime("start"),
     endsAt: datetime("end"),
     remainingVisits: int("remaining_visits"),
@@ -409,7 +422,18 @@ export const orders = mysqlTable(
     branchId: varchar("branch_id", { length: 20 }),
     userId: varchar("user_id", { length: 64 }),
     userType: varchar("user_type", { length: 20 }),
+    /**
+     * What the sale comes to **after** any discount. Every debt query in this
+     * service reads `total_price - SUM(income.amount)`, so netting it here is
+     * what keeps a discounted order from being chased for the difference.
+     */
     totalPrice: decimal("total_price", { precision: 10, scale: 2 }),
+    /**
+     * How much was taken off the line totals, or null when nothing was. The
+     * gross is `total_price + discount`; the lines still carry their own prices,
+     * so a discount is never smeared across them.
+     */
+    discount: decimal("discount", { precision: 10, scale: 2 }),
     createdAt: timestamp("created_at"),
     settledAt: datetime("settled_at"),
     status: varchar("status", { length: 16 }),

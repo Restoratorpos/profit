@@ -15,6 +15,7 @@ import {
   storageActionsRep,
   workers,
 } from "../db/schema.js";
+import { cappedDiscount, discountOf } from "../lib/discount.js";
 import {
   BadRequestError,
   ConflictError,
@@ -73,6 +74,8 @@ export interface OrderItemView {
 
 export interface MemberOrderView {
   createdAt: string | null;
+  /** Money taken off this sale, or null when it was rung up at full price. */
+  discount: string | null;
   id: string;
   items: OrderItemView[];
   paid: string;
@@ -238,6 +241,7 @@ const loadOpenMemberOrders = async (
       id: orders.orderId,
       branchId: orders.branchId,
       createdAt: orders.createdAt,
+      discount: orders.discount,
       total: orders.totalPrice,
     })
     .from(orders)
@@ -384,6 +388,7 @@ export const getMemberOrderDetail = async (
     .select({
       id: orders.orderId,
       total: orders.totalPrice,
+      discount: orders.discount,
       createdAt: orders.createdAt,
       settledAt: orders.settledAt,
     })
@@ -470,6 +475,9 @@ export const getMemberOrderDetail = async (
       id: row.id,
       createdAt: toIsoDate(row.createdAt),
       settledAt: toIsoDate(row.settledAt),
+      // What was taken off, or null when nothing was. The drawer only shows the
+      // line when there is one, so "no discount" needs no figure of its own.
+      discount: row.discount ? toMoney(toNumber(row.discount)) : null,
       total: toMoney(orderTotal),
       paid: toMoney(paid),
       remaining: toMoney(remaining),
@@ -520,10 +528,12 @@ export const payMemberOrders = async (
   const outstanding = openOrders.map((row) => ({
     id: row.id,
     branchId: row.branchId,
+    discount: toNumber(row.discount),
     remaining: Math.max(
       toNumber(row.total) - (paidByOrder.get(row.id) ?? 0),
       0
     ),
+    total: toNumber(row.total),
   }));
 
   const totalRemaining = outstanding.reduce(
@@ -535,18 +545,77 @@ export const payMemberOrders = async (
     throw new ConflictError("No outstanding balance");
   }
 
-  // Never take more than is owed: the UI caps the amount at the balance, and
-  // clamping here keeps a stale client from booking a credit.
-  let leftover = Math.min(Number(input.amount), totalRemaining);
+  /*
+   * A discount given while settling is forgiven debt: it comes off the balance
+   * before any money is applied, oldest order first — the same order the payment
+   * itself walks, so the two agree about which orders they touched.
+   *
+   * Resolved against what is *still owed* rather than the original sale, because
+   * that is the figure on the screen the desk is discounting.
+   */
+  let forgiving = discountOf(totalRemaining, input.discount);
+
+  // Never take more than is owed *after* the discount, or a stale client could
+  // book a credit against a balance the discount had already cleared.
+  let leftover = Math.min(
+    Number(input.amount),
+    Math.max(totalRemaining - forgiving, 0)
+  );
   const now = new Date();
+
+  /**
+   * Writes off part of one order: its total drops by what was forgiven and its
+   * `discount` grows by the same, so `total - paid` is still the debt and the row
+   * still says what was given away. Returns what it took.
+   */
+  const forgiveOn = async (
+    tx: Transaction,
+    order: (typeof outstanding)[number],
+    asked: number
+  ): Promise<number> => {
+    const forgiven = Math.min(order.remaining, asked);
+
+    if (forgiven <= 0) {
+      return 0;
+    }
+
+    await tx
+      .update(orders)
+      .set({
+        totalPrice: toMoney(order.total - forgiven),
+        discount: toMoney(order.discount + forgiven),
+      })
+      .where(and(eq(orders.gymId, gymId), eq(orders.orderId, order.id)));
+
+    return forgiven;
+  };
+
+  const settle = (tx: Transaction, orderId: string) =>
+    tx
+      .update(orders)
+      .set({ settledAt: now })
+      .where(and(eq(orders.gymId, gymId), eq(orders.orderId, orderId)));
 
   await db.transaction(async (tx) => {
     for (const order of outstanding) {
-      if (leftover <= 0) {
-        break;
+      if (order.remaining <= 0) {
+        continue;
       }
 
+      // Forgiven first, so the payment below only ever sees what is really left.
+      const forgiven = await forgiveOn(tx, order, forgiving);
+
+      forgiving -= forgiven;
+      order.remaining -= forgiven;
+
+      // A discount that cleared the order settles it with no income row at all —
+      // nothing was collected against it.
       if (order.remaining <= 0) {
+        await settle(tx, order.id);
+        continue;
+      }
+
+      if (leftover <= 0) {
         continue;
       }
 
@@ -572,10 +641,7 @@ export const payMemberOrders = async (
       // Fully covered now — a settled order is what drops the member off the
       // unpaid tab and stops its total counting toward their debt.
       if (applied >= order.remaining) {
-        await tx
-          .update(orders)
-          .set({ settledAt: now })
-          .where(and(eq(orders.gymId, gymId), eq(orders.orderId, order.id)));
+        await settle(tx, order.id);
       }
 
       leftover -= applied;
@@ -1000,7 +1066,16 @@ export const createOrder = async (
   }
 
   const lines = await buildOrderLines(gymId, input.items);
-  const total = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const gross = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+
+  /*
+   * The discount comes off before the legs are walked, so every downstream figure
+   * means the discounted sale: what the tills take, what settles it, and what is
+   * left owed. A percentage resolves against `gross` — computed here from the
+   * catalog — rather than against anything the client sent.
+   */
+  const discount = discountOf(gross, input.discount);
+  const total = gross - discount;
 
   const { isSettled, rows } = settleCheckout(total, input.payments);
 
@@ -1021,6 +1096,9 @@ export const createOrder = async (
       userId: memberId,
       userType: memberId ? "member" : "guest",
       totalPrice: toMoney(total),
+      // Null rather than "0.00" when nothing was given, so "was this discounted"
+      // is answerable without reading it as a discount of nothing.
+      discount: discount > 0 ? toMoney(discount) : null,
       createdAt: now,
       // Covered in full settles it now; a short or credit sale stays open.
       settledAt: isSettled ? now : null,
@@ -1451,29 +1529,44 @@ const applyLineChange = async (
  * left on it is not a zero sale — it is no sale. Otherwise a shrunken order its
  * payments now cover is settled, and one that grew past them re-opens on the
  * member's balance.
+ *
+ * A discount survives the edit as the figure it was: `total` arrives gross, off
+ * the remaining lines, and the discount is taken off again. Recomputing the total
+ * without it is what would silently chase a member for money the desk had already
+ * agreed to take off. It is re-capped because an order can shrink below what was
+ * discounted, and the clamped figure is written back so the row keeps saying what
+ * was actually given.
  */
 const restateOrderRow = (
   tx: Transaction,
   input: {
+    /** What was taken off this order when it was rung up, in money. */
+    discount: number;
     gymId: string;
     hasLines: boolean;
     orderId: string;
     paid: number;
     time: Date;
+    /** The gross of the lines that remain — the discount has not been applied. */
     total: number;
   }
-) =>
-  tx
+) => {
+  const discount = cappedDiscount(input.total, input.discount);
+  const total = input.total - discount;
+
+  return tx
     .update(orders)
     .set({
-      totalPrice: toMoney(input.total),
+      totalPrice: toMoney(total),
+      discount: discount > 0 ? toMoney(discount) : null,
       ...(input.hasLines
-        ? { settledAt: input.total <= input.paid + 0.005 ? input.time : null }
+        ? { settledAt: total <= input.paid + 0.005 ? input.time : null }
         : { status: "void" }),
     })
     .where(
       and(eq(orders.gymId, input.gymId), eq(orders.orderId, input.orderId))
     );
+};
 
 /**
  * Corrects a member's open orders: a line's quantity, a line removed outright,
@@ -1535,10 +1628,25 @@ export const editMemberOrderItems = async (
 
   const paidByOrder = await loadPaidByOrder(gymId, orderIds);
 
+  /*
+   * What each order was discounted by, so the edit can put it back. Read from the
+   * rows already loaded rather than re-queried — and the shortfall check below
+   * measures against the *discounted* total, because that is what the member owes
+   * and therefore what their payments can be compared with.
+   */
+  const discountByOrder = new Map(
+    openOrders.map((row) => [row.id, toNumber(row.discount)])
+  );
+
+  const netTotal = (orderId: string): number => {
+    const gross = totalByOrder.get(orderId) ?? 0;
+
+    return gross - cappedDiscount(gross, discountByOrder.get(orderId) ?? 0);
+  };
+
   for (const orderId of touched) {
     // A cent of slack absorbs decimal rounding, matching checkout.
-    const shortfall =
-      (paidByOrder.get(orderId) ?? 0) - (totalByOrder.get(orderId) ?? 0);
+    const shortfall = (paidByOrder.get(orderId) ?? 0) - netTotal(orderId);
 
     if (shortfall > 0.005) {
       throw new ConflictError(
@@ -1575,6 +1683,7 @@ export const editMemberOrderItems = async (
 
     for (const orderId of touched) {
       await restateOrderRow(tx, {
+        discount: discountByOrder.get(orderId) ?? 0,
         gymId,
         hasLines: (lineCountByOrder.get(orderId) ?? 0) > 0,
         orderId,

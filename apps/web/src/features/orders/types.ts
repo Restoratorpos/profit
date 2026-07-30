@@ -65,6 +65,8 @@ export interface OrderItemView {
 /** One order in a member's history, with its own line items and paid split. */
 export interface MemberOrderView {
   createdAt: string | null;
+  /** Money taken off this sale, or null when it was rung up at full price. */
+  discount: string | null;
   id: string;
   items: OrderItemView[];
   paid: string;

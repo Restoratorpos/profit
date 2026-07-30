@@ -180,6 +180,20 @@ const MembershipMoney = ({
 
   return (
     <>
+      {/* What came off, when something did. Above the paid row because it is what
+          made the charged figure what it is — without it, a 350,000 charge against
+          a 400,000 plan looks like a missing 50,000. */}
+      {membership.discount && Number(membership.discount) > 0 ? (
+        <PanelRow
+          label={messages["orders.discountLabel"]}
+          value={
+            <span className="font-semibold text-primary-accent">
+              −{formatMoney(membership.discount)}
+            </span>
+          }
+        />
+      ) : null}
+
       {/* Paid over charged on one line: either number alone is half a fact,
           and the pair is what "how much of it is paid" actually means. */}
       <PanelRow
@@ -379,7 +393,7 @@ export const MembershipDetailSheet = ({
               <MoneySummary member={shown} messages={messages} />
             </SheetHeader>
 
-            <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
               <section className="flex flex-col gap-2.5">
                 <PanelHeading
                   count={shown.memberships.length}

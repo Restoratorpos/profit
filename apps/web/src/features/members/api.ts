@@ -22,6 +22,12 @@ export const memberKeys = {
 
 export interface MembershipInput {
   /**
+   * What the desk took off the plan's price, as a rate or a figure — null at full
+   * price. The server resolves it against the plan's own price, so the money it
+   * came to on screen is deliberately not sent.
+   */
+  discount: { kind: "amount" | "percent"; value: number } | null;
+  /**
    * How the sale is settled, in order — one leg for an ordinary sale, up to
    * three for a split. A leg with no amount takes whatever is still
    * outstanding, which the server works out from the plan's own price.

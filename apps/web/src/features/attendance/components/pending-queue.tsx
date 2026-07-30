@@ -51,6 +51,13 @@ const ARRIVAL_MS = 10_000;
  * When a notice about `time` stops being shown, or null when there is nothing
  * to time. Measured from the scan itself, not from when this page first drew
  * it: a banner's age is the door's, so a reload cannot restart the clock.
+ *
+ * A scan is never treated as being in the future. The timestamp comes from the
+ * terminal, whose clock drifts from this machine's — the one at CHORSU runs
+ * about two and a half minutes ahead — and a future timestamp made the banner
+ * outlive its twenty seconds by exactly that drift, which reads as a notice
+ * that has stuck rather than one that is simply young. Clamping costs nothing
+ * when the clocks agree and bounds the damage when they do not.
  */
 const expiryOf = (
   time: string | null | undefined,
@@ -62,7 +69,7 @@ const expiryOf = (
 
   const at = new Date(time).getTime();
 
-  return Number.isFinite(at) ? at + life : null;
+  return Number.isFinite(at) ? Math.min(at, Date.now()) + life : null;
 };
 
 /** The soonest deadline still ahead of `now`, or null if none is. */

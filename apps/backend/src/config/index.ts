@@ -29,6 +29,8 @@ export const config = {
     /** The address a terminal on the LAN can reach this server on. */
     callbackHost: env.DEVICE_CALLBACK_HOST,
     callbackPort: env.DEVICE_CALLBACK_PORT ?? env.PORT,
+    /** Whose terminals to re-point at boot; unset means "do not". */
+    gymId: env.DEVICE_GYM_ID,
   },
   auth: {
     bcryptRounds: env.BCRYPT_ROUNDS,

@@ -1,0 +1,30 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "//productName": "Electron reads this for app.getName(), which decides where userData lives. Without it the config file would sit in %APPDATA%\\desktop — named after the workspace rather than the product, and not where anybody would look for it.",
+  "productName": "GYM",
+  "description": "The GYM desk terminal as a Windows application",
+  "author": "FITZLY",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && pnpm bundle:backend && pnpm bundle:defaults",
+    "//bundle:defaults": "Bakes apps/backend/.env.local into the build so a fresh install needs nothing typed. Read the script before shipping this anywhere public.",
+    "bundle:defaults": "node scripts/make-defaults.mjs",
+    "bundle:backend": "esbuild ../backend/src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/backend/index.js --external:pino-pretty",
+    "//dev": "Only tsc — the server bundle is a packaging concern, and in dev the window loads Vite while turbo runs the real backend on 7090.",
+    "dev": "tsc && electron dist/main.js",
+    "start": "electron dist/main.js",
+    "package": "pnpm build && electron-builder --win",
+    "typecheck": "tsc --noEmit",
+    "clean": "git clean -xdf .turbo dist release node_modules"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.2"
+  }
+}

@@ -35,9 +35,16 @@ import {
 } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
 import { DateField } from "@/components/date-field";
+import { DiscountField } from "@/components/discount-field";
 import { FaceDialog } from "@/components/face-dialog";
 import { FaceField } from "@/components/face-field";
 import { MoneyInput } from "@/components/money-input";
+import {
+  type DiscountDraft,
+  discountOf,
+  emptyDiscount,
+  toDiscountRequest,
+} from "@/lib/discount";
 import { removeFace, setFace } from "@/lib/face/api";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -288,16 +295,39 @@ const PersonFields = ({
 /** What the money adds up to. Recomputed as the operator types. */
 const PaymentSummary = ({
   debt,
+  discount,
   messages,
   paid,
   total,
 }: {
   debt: number;
+  /** Money off the plan's list price, or zero when it is being sold at full. */
+  discount: number;
   messages: Messages;
   paid: number;
   total: number;
 }) => (
   <dl className="flex flex-col gap-1 rounded-xl bg-muted p-4">
+    {/* Only when something is actually off: on a full-price sale the list price
+        and the total are the same figure, and printing both says nothing twice. */}
+    {discount > 0 ? (
+      <>
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">
+            {messages["orders.subtotalLabel"]}
+          </dt>
+          <dd className="tabular-nums">
+            {formatMoney((total + discount).toFixed(2))}
+          </dd>
+        </div>
+        <div className="flex justify-between text-primary-accent">
+          <dt>{messages["orders.discountLabel"]}</dt>
+          <dd className="font-semibold tabular-nums">
+            −{formatMoney(discount.toFixed(2))}
+          </dd>
+        </div>
+      </>
+    ) : null}
     <div className="flex justify-between">
       <dt className="text-muted-foreground">
         {messages["members.totalLabel"]}
@@ -322,9 +352,14 @@ export interface MembershipSectionProperties {
   applied: readonly number[];
   debt: number;
   disabled: boolean;
+  /** What the desk has typed into the discount box, rate or figure. */
+  discount: DiscountDraft;
+  /** The money that draft comes to against this plan's price. */
+  discountTaken: number;
   /** How the sale is being settled, in order. Grows as the desk splits it. */
   legs: readonly PaymentLeg[];
   messages: Messages;
+  onDiscount: (next: DiscountDraft) => void;
   onLegAmount: (index: number, next: string) => void;
   onLegMethod: (index: number, next: PaymentType) => void;
   onLegTill: (index: number, next: Till) => void;
@@ -344,8 +379,11 @@ export const MembershipSection = ({
   applied,
   debt,
   disabled,
+  discount,
+  discountTaken,
   legs,
   messages,
+  onDiscount,
   onLegAmount,
   onLegMethod,
   onLegTill,
@@ -439,6 +477,25 @@ export const MembershipSection = ({
                 value={leg.method}
               />
 
+              {/* On the first leg only, directly under the methods: the discount
+                  belongs to the sale rather than to one way of paying for it, and
+                  every figure below — each leg's placeholder, the qoldiq, what is
+                  left owing — is measured from the discounted price. */}
+              {index === 0 ? (
+                <Field>
+                  <FieldLabel htmlFor="member-discount">
+                    {messages["orders.discountLabel"]}
+                  </FieldLabel>
+                  <DiscountField
+                    disabled={disabled}
+                    id="member-discount"
+                    messages={messages}
+                    onChange={onDiscount}
+                    value={discount}
+                  />
+                </Field>
+              ) : null}
+
               <Field>
                 <FieldLabel htmlFor={`member-paid-${index}`}>
                   {messages["members.fieldPaidAmount"]}
@@ -506,6 +563,7 @@ export const MembershipSection = ({
 
         <PaymentSummary
           debt={debt}
+          discount={discountTaken}
           messages={messages}
           paid={paid}
           total={total}
@@ -551,12 +609,23 @@ export const MemberSheet = ({
    * splits it, and are dropped again the moment they stop being needed.
    */
   const [legs, setLegs] = useState<PaymentLeg[]>(firstLeg);
+  /** What was typed into the discount box — a rate or a figure, as typed. */
+  const [discount, setDiscount] = useState<DiscountDraft>(emptyDiscount);
 
   const isEditing = Boolean(member);
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null;
   const listPrice = Number(selectedPlan?.price ?? 0);
 
-  const { applied, debt, paid, total } = settlementOf(listPrice, legs);
+  /*
+   * The discount comes off the plan's price before the legs are walked, so the
+   * qoldiq the desk watches is the discounted one. The server resolves it again
+   * from the plan's own price — this is what makes it visible while typing.
+   */
+  const discountTaken = discountOf(listPrice, discount);
+  const { applied, debt, paid, total } = settlementOf(
+    listPrice - discountTaken,
+    legs
+  );
   const shown = visibleLegCount(listPrice, legs);
 
   const handlePlanChange = (next: string) => {
@@ -565,6 +634,9 @@ export const MemberSheet = ({
     // against the old one would silently mean something else. A blank box is
     // "the whole price", which is what picking a plan usually means anyway.
     setLegs(firstLeg);
+    // Cleared for the same reason, and it matters more here: "20,000 off" carried
+    // onto a cheaper plan is a bigger discount than the desk agreed to.
+    setDiscount(emptyDiscount());
   };
 
   const patchLeg = (index: number, patch: Partial<PaymentLeg>) => {
@@ -609,6 +681,8 @@ export const MemberSheet = ({
                 // records: a qarz carrying a part payment becomes that payment
                 // plus the balance behind it.
                 payments: toPayments(legs.slice(0, shown)),
+                // The rate or figure as entered; the server resolves the money.
+                discount: toDiscountRequest(discount),
               },
       });
 
@@ -755,7 +829,7 @@ export const MemberSheet = ({
           onSubmit={handleSubmit}
           ref={formRef}
         >
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
             <PersonFields
               disabled={isPending}
               errors={fieldErrors}
@@ -792,8 +866,11 @@ export const MemberSheet = ({
                 applied={applied}
                 debt={debt}
                 disabled={isPending}
+                discount={discount}
+                discountTaken={discountTaken}
                 legs={legs}
                 messages={messages}
+                onDiscount={setDiscount}
                 onLegAmount={(index, next) => patchLeg(index, { amount: next })}
                 onLegMethod={(index, next) => patchLeg(index, { method: next })}
                 onLegTill={(index, next) => patchLeg(index, { till: next })}

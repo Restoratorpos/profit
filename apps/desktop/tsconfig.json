@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    /*
+     * Nothing imports this workspace, so declarations are dead weight — and the
+     * same TS2742 trap the source-only packages document applies here under
+     * pnpm's non-hoisted layout.
+     */
+    "declaration": false,
+    "declarationMap": false,
+    /* The main process is Node. No DOM: the renderer is apps/web's bundle. */
+    "lib": ["es2022"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

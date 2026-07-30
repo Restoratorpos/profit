@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discountSchema } from "./discount.js";
 
 /** Free-form varchar in SQL, so the accepted set is decided here. */
 export const MEMBER_GENDERS = ["male", "female"] as const;
@@ -105,6 +106,13 @@ export const membershipSaleSchema = z.object({
     .array(paymentLegSchema)
     .min(1, "A membership sale needs a payment method")
     .max(MAX_PAYMENT_LEGS, "A sale may be split three ways at most"),
+  /**
+   * Taken off the plan's list price before the payment legs are walked, so the
+   * member is settled — and owed — against the discounted figure. Omitted means
+   * full price; a percentage resolves against the plan's own price, read here,
+   * never against a total the client sent.
+   */
+  discount: discountSchema.nullish(),
 });
 
 export const createMemberSchema = z.object({

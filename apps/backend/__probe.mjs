@@ -1,4 +1,5 @@
 import { config } from "dotenv";
+
 config({ path: [".env.local", ".env"] });
 const mysql = (await import("mysql2/promise")).default;
 

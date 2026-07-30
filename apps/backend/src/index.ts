@@ -4,6 +4,7 @@ import { config } from "./config/index.js";
 import { closeDatabase, pingDatabase } from "./db/index.js";
 import { logger } from "./lib/logger.js";
 import { connectRedis, disconnectRedis } from "./lib/redis.js";
+import { republishPushHosts } from "./services/device.service.js";
 
 const start = async (): Promise<void> => {
   // The database is not optional: fail loudly at boot rather than on the first
@@ -26,6 +27,19 @@ const start = async (): Promise<void> => {
     },
     (info) => logger.info(`API listening on http://localhost:${info.port}`)
   );
+
+  /*
+   * After the port is open, not before: re-pointing a terminal means talking to
+   * it over the network, and a device that is unplugged takes its time failing.
+   * The desk should not wait on that to start selling.
+   *
+   * Deliberately not awaited, for the same reason.
+   */
+  if (config.devices.gymId) {
+    republishPushHosts(config.devices.gymId).catch((error) =>
+      logger.warn({ err: error }, "Could not re-apply push destinations")
+    );
+  }
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, "Shutting down");

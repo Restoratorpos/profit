@@ -1,0 +1,67 @@
+# How the .exe is built. `pnpm --filter desktop package` produces both an
+# installer and a portable exe under apps/desktop/release.
+appId: uz.fitzly.gym
+productName: GYM
+copyright: FITZLY
+
+directories:
+  output: release
+  buildResources: build
+
+# There are no native modules here — the main process is plain TypeScript against
+# Node's own http and fs. Left on, electron-builder runs @electron/rebuild, which
+# walks pnpm's non-hoisted tree looking for a hoisted `node_modules/app` that does
+# not exist under this workspace layout and fails the build outright.
+npmRebuild: false
+
+# Only the compiled main process. The SPA is not part of `files` because it is not
+# this workspace's code — it is copied in as a resource below, so a rebuild of the
+# web app does not need this package to change.
+files:
+  - dist/**/*
+  - package.json
+  # The server bundle is executed as a process, not read as a file, so it must
+  # not be sealed inside the asar archive — it is copied out as a resource below.
+  - "!dist/backend"
+
+# The built SPA, loaded from `process.resourcesPath/web` at runtime. Packaging
+# fails loudly if apps/web has not been built, which is the right time to find
+# out — rather than a window that opens on a missing-bundle dialog.
+extraResources:
+  - from: ../web/dist
+    to: web
+    filter:
+      - "**/*"
+  # The API server: one esbuild bundle with every dependency inlined, which is
+  # what lets it ship without a node_modules tree out of pnpm's symlinked store.
+  - from: dist/backend
+    to: backend
+    filter:
+      - "**/*"
+
+# `asar` keeps the main process in one archive. The SPA stays outside it, as a
+# plain folder: an operator with a broken install can see whether the bundle is
+# actually there.
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  # Opens port 7090 for the door terminal during install, and closes it on
+  # uninstall. Possible only because the install is elevated — see the file.
+  include: build/installer.nsh
+  # A per-machine install, so a till shared by shift workers has one copy rather
+  # than one per Windows account.
+  perMachine: true
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GYM

@@ -269,7 +269,7 @@ export const WorkerSheet = ({
           className="flex flex-1 flex-col overflow-hidden"
           onSubmit={handleSubmit}
         >
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
             <Field data-invalid={Boolean(nameError) || undefined}>
               <FieldLabel htmlFor="worker-name">
                 <span className="text-destructive">*</span>{" "}

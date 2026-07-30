@@ -19,6 +19,10 @@ const src = join(process.cwd(), "src");
 const PAGE_COMPONENT = /-(view|page|composer)\.tsx$/;
 const SCROLLS_ITSELF = /overflow-y-auto|overflow-auto/;
 const FILLS_VIEWPORT = /\bh-(screen|svh|full)\b/;
+const TSX_FILE = /\.tsx$/;
+const PANEL_COMPONENT = /sheet|dialog/;
+const CLASS_ATTRIBUTE = /class[nN]ame="[^"]*"/g;
+const GROWS_TO_FILL = /\bflex-1\b/;
 
 const read = (path: string) => readFileSync(join(src, path), "utf8");
 
@@ -119,5 +123,44 @@ describe("pages", () => {
      */
     expect(source).not.toMatch(SCROLLS_ITSELF);
     expect(source).not.toMatch(FILLS_VIEWPORT);
+  });
+});
+
+/**
+ * The same `min-h-0` rule the shell follows, inside every panel.
+ *
+ * A sheet is a full-height flex column: a header, something that scrolls, and
+ * usually a footer carrying the button the panel exists for. `flex-1` alone
+ * leaves `min-height: auto`, so the scrolling child cannot shrink below its own
+ * content — the column grows past the viewport instead, and the footer is pushed
+ * off the bottom of the screen. On a tall display nothing looks wrong; on a 500px
+ * laptop the Saqlash and To'lash buttons are simply unreachable, with no
+ * scrollbar to explain why.
+ */
+const panels = readdirSync(join(src, "features"), {
+  recursive: true,
+  withFileTypes: true,
+})
+  .filter(
+    (entry) =>
+      entry.isFile() &&
+      TSX_FILE.test(entry.name) &&
+      PANEL_COMPONENT.test(entry.name)
+  )
+  .map((entry) => join(entry.parentPath, entry.name));
+
+describe("panels", () => {
+  it("finds sheets and dialogs to check", () => {
+    expect(panels.length).toBeGreaterThan(5);
+  });
+
+  it.each(panels)("%s can shrink what it scrolls", (path) => {
+    const source = readFileSync(path, "utf8");
+
+    for (const className of source.match(CLASS_ATTRIBUTE) ?? []) {
+      if (SCROLLS_ITSELF.test(className) && GROWS_TO_FILL.test(className)) {
+        expect(className).toContain("min-h-0");
+      }
+    }
   });
 });

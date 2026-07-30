@@ -33,6 +33,7 @@ import {
   putPerson,
   toDeviceEmployeeNo,
 } from "../lib/hikvision.js";
+import { logger } from "../lib/logger.js";
 import {
   canStoreSecrets,
   decryptSecret,
@@ -345,6 +346,60 @@ export const testDevice = async (
     .where(and(eq(devices.gymId, gymId), eq(devices.deviceId, deviceId)));
 
   return info;
+};
+
+/**
+ * Re-tells every terminal in a gym where to push, at startup.
+ *
+ * A terminal is configured once and then remembers that address forever. When
+ * this server's own address moves — a DHCP lease, a machine swapped, a till
+ * carried to another room — the device keeps posting to where it was told, and
+ * **nothing reports it**: the device cannot say that its destination refused the
+ * connection, and this server never hears from it again. Meanwhile the device
+ * page still reads "connected", because that only tests the call in the other
+ * direction. Attendance simply stops, silently.
+ *
+ * That happened between 28 and 30 July 2026: the desk PC moved from
+ * .106 to .105 and two days of scans went nowhere.
+ *
+ * Re-applying on every boot removes the failure rather than reporting it. It is
+ * unconditional instead of compared-first because the push config is idempotent
+ * and a read is a second round trip to a device that may be asleep; writing it
+ * costs one call and is correct whatever the device currently holds.
+ *
+ * Scoped to one gym, which is why it needs `DEVICE_GYM_ID`. The devices table
+ * spans every gym in this database, and their terminals sit on private ranges
+ * that overlap — `192.168.1.100` is a different box in each one. Walking all of
+ * them would mean this desk reconfiguring whatever answers on its own LAN at
+ * another gym's address, handing it another gym's webhook key.
+ */
+export const republishPushHosts = async (gymId: string): Promise<void> => {
+  const rows = await db
+    .select({ deviceId: devices.deviceId, name: devices.deviceName })
+    .from(devices)
+    .where(and(eq(devices.gymId, gymId), eq(devices.isActive, true)));
+
+  for (const row of rows) {
+    try {
+      const destination = await enablePush(gymId, row.deviceId);
+
+      logger.info(
+        { destination, device: row.name },
+        "Terminal push destination re-applied"
+      );
+    } catch (error) {
+      /*
+       * Logged, never thrown. A terminal that is unplugged, asleep, or has had
+       * its password changed must not stop the server starting — the desk still
+       * needs to sell things, and the door is the one thing that keeps working
+       * on its own.
+       */
+      logger.warn(
+        { device: row.name, err: error },
+        "Could not re-apply the push destination for this terminal"
+      );
+    }
+  }
 };
 
 /**

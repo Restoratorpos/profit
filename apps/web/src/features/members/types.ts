@@ -22,6 +22,11 @@ export type MembershipState = "active" | "expiring" | "expired";
 export interface MemberMembership {
   /** Decimal string. Still owed on this one membership: `price - paid`. */
   debt: string;
+  /**
+   * Decimal string, or null at full price. What was taken off the plan's list
+   * price when this was sold — `price + discount` is what it cost that day.
+   */
+  discount: string | null;
   endsAt: string | null;
   id: string;
   /** The plan name. There is no category on `plans`, so this is the type. */

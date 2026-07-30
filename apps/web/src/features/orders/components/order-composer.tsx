@@ -31,6 +31,7 @@ import {
   GiftIcon,
   type LucideIcon,
   MinusIcon,
+  PercentIcon,
   PlusIcon,
   SearchIcon,
   ShoppingBagIcon,
@@ -40,8 +41,16 @@ import {
   XIcon,
 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
+import { DiscountField } from "@/components/discount-field";
 import { MoneyInput } from "@/components/money-input";
 import { readableTextOn } from "@/features/products/types";
+import {
+  type DiscountDraft,
+  discountOf,
+  emptyDiscount,
+  hasDiscount,
+  toDiscountRequest,
+} from "@/lib/discount";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useCreateOrder } from "../api";
@@ -123,16 +132,20 @@ const legAmountValue = (
  */
 const PaymentLegFields = ({
   disabled,
+  discount,
   index,
   isFinal,
   leg,
   messages,
   onAmount,
+  onDiscount,
   onMethod,
   onTill,
   outstanding,
 }: {
   disabled: boolean;
+  /** The sale's discount, drawn under the first leg's tiles. */
+  discount: DiscountDraft;
   index: number;
   /**
    * The third and last. It takes whatever is left and cannot be typed into —
@@ -144,6 +157,7 @@ const PaymentLegFields = ({
   leg: PaymentLeg;
   messages: Messages;
   onAmount: (next: string) => void;
+  onDiscount: (next: DiscountDraft) => void;
   onMethod: (next: OrderCheckoutType) => void;
   onTill: (next: Till) => void;
   /** What is still unpaid when this leg is reached — its placeholder. */
@@ -155,6 +169,7 @@ const PaymentLegFields = ({
   const canType = canTypeAmount(leg.method);
   const isFixed = isFinal && leg.method !== "debt" && canType;
   const asksTill = needsTill(leg, index);
+  const [isDiscounting, setDiscounting] = useState(false);
 
   return (
     <>
@@ -184,6 +199,21 @@ const PaymentLegFields = ({
         })}
       </div>
 
+      {/* On the first leg only, directly under the methods: the discount belongs
+          to the sale rather than to one way of paying for it, and every figure
+          below — each leg's placeholder, the qoldiq, what is left owing — is
+          measured from the discounted total. Asked for rather than offered, and
+          it opens itself when one is already entered. */}
+      {index === 0 && (isDiscounting || hasDiscount(discount)) ? (
+        <DiscountField
+          disabled={disabled}
+          id="order-discount"
+          messages={messages}
+          onChange={onDiscount}
+          value={discount}
+        />
+      ) : null}
+
       {/* Kept mounted while a comp or a qarz is selected, only disabled — the
           amount stays visible so switching back does not lose what was typed.
           The final leg shows the rest as a fact rather than a field: read-only,
@@ -203,16 +233,33 @@ const PaymentLegFields = ({
           readOnly={isFixed}
           value={legAmountValue(leg, outstanding, isFixed)}
         />
-        {isFixed || !canType ? null : (
+        {/*
+         * "To'liq" is gone from beside the box. It re-typed what the
+         * placeholder already promises: a blank leg takes whatever is still
+         * outstanding, so pressing it changed the figure on screen and nothing
+         * about the sale.
+         *
+         * Its place goes to the discount, which is the thing the desk actually
+         * reaches for here, and only on the first leg — the sale has one
+         * discount however many ways it is split.
+         */}
+        {index === 0 ? (
           <Button
+            aria-label={messages["orders.discountLabel"]}
+            aria-pressed={isDiscounting || hasDiscount(discount)}
+            className={cn(
+              (isDiscounting || hasDiscount(discount)) && SELECTED_TINT
+            )}
             disabled={disabled}
-            onClick={() => onAmount(String(Math.round(outstanding)))}
+            onClick={() => setDiscounting((current) => !current)}
+            size="icon"
+            title={messages["orders.discountLabel"]}
             type="button"
             variant="outline"
           >
-            {messages["orders.full"]}
+            <PercentIcon className="size-4" />
           </Button>
-        )}
+        ) : null}
       </div>
 
       {/* A qarz names no drawer, so a part payment against one has to say where
@@ -469,11 +516,14 @@ const CartRow = ({
 
 const OrderSummary = ({
   cart,
+  discount,
   error,
+  gross,
   isPending,
   legs,
   messages,
   onCheckout,
+  onDiscount,
   onLegAmount,
   onLegMethod,
   onLegTill,
@@ -482,21 +532,28 @@ const OrderSummary = ({
   total,
 }: {
   cart: readonly CartLine[];
+  /** What the desk has typed into the discount box, rate or figure. */
+  discount: DiscountDraft;
   error: string | null;
+  /** The cart before any discount — what the lines add up to. */
+  gross: number;
   isPending: boolean;
   /** How the sale is being settled, in order. Grows as the desk splits it. */
   legs: readonly PaymentLeg[];
   messages: Messages;
   onCheckout: () => void;
+  onDiscount: (next: DiscountDraft) => void;
   onLegAmount: (index: number, next: string) => void;
   onLegMethod: (index: number, next: OrderCheckoutType) => void;
   onLegTill: (index: number, next: Till) => void;
   onQty: (productId: string, delta: number) => void;
   onRemove: (productId: string) => void;
+  /** The cart after the discount — what is actually being settled. */
   total: number;
 }) => {
   const { applied, remaining } = settlementOf(total, legs);
   const shown = visibleLegCount(total, legs);
+  const discountTaken = gross - total;
 
   return (
     /*
@@ -531,6 +588,27 @@ const OrderSummary = ({
               />
             ))}
           </ul>
+
+          {/* Only shown once something is actually off: on a full-price sale a
+              subtotal identical to the total is a line that says nothing twice. */}
+          {discountTaken > 0 ? (
+            <div className="flex flex-col gap-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  {messages["orders.subtotalLabel"]}
+                </span>
+                <span className="tabular-nums">
+                  {formatMoney(gross.toFixed(2))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-primary-accent">
+                <span>{messages["orders.discountLabel"]}</span>
+                <span className="font-semibold tabular-nums">
+                  −{formatMoney(discountTaken.toFixed(2))}
+                </span>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex items-center justify-between border-t pt-3">
             <span className="text-muted-foreground uppercase tracking-wide">
@@ -572,11 +650,13 @@ const OrderSummary = ({
 
                 <PaymentLegFields
                   disabled={isPending}
+                  discount={discount}
                   index={index}
                   isFinal={isFinalLeg(index)}
                   leg={leg}
                   messages={messages}
                   onAmount={(next) => onLegAmount(index, next)}
+                  onDiscount={onDiscount}
                   onMethod={(next) => onLegMethod(index, next)}
                   onTill={(next) => onLegTill(index, next)}
                   outstanding={outstanding}
@@ -641,6 +721,11 @@ export const OrderComposer = ({
   const [query, setQuery] = useState("");
   const [customer, setCustomer] = useState<OrderCustomer | null>(null);
   const [cart, setCart] = useState<CartLine[]>([]);
+  /**
+   * What the desk has typed into the discount box. Held as what was typed rather
+   * than as money, so switching between % and UZS keeps the number.
+   */
+  const [discount, setDiscount] = useState<DiscountDraft>(emptyDiscount);
   /**
    * How the sale is settled, in order. One leg is the ordinary sale — cash,
    * blank box, the whole total. A second and third appear only as the desk
@@ -738,7 +823,8 @@ export const OrderComposer = ({
   const openCategory =
     categories.find((category) => category.id === openCategoryId) ?? null;
 
-  const total = useMemo(
+  /** What the lines add up to, before anything is taken off. */
+  const gross = useMemo(
     () =>
       cart.reduce(
         (sum, line) => sum + priceOf(line.product) * line.quantity,
@@ -746,6 +832,17 @@ export const OrderComposer = ({
       ),
     [cart]
   );
+
+  /*
+   * What is actually being settled. Every figure below this — the legs, the
+   * qoldiq, whether the sale is owed — is measured from the discounted total, so
+   * the discount is applied once, here, rather than remembered by each of them.
+   *
+   * The server resolves it again from its own catalog prices; this is what lets
+   * the desk watch the total drop as it types.
+   */
+  const discountTaken = discountOf(gross, discount);
+  const total = gross - discountTaken;
 
   // Built once per cart change rather than searched per tile, so a grid of a few
   // hundred products stays one pass instead of a scan each.
@@ -838,6 +935,9 @@ export const OrderComposer = ({
         // qarz carrying a part payment becomes that payment plus the balance
         // behind it.
         payments: toPayments(legs.slice(0, visibleLegCount(total, legs))),
+        // The rate or figure the desk entered, not the money it came to here —
+        // the server resolves it against its own prices.
+        discount: toDiscountRequest(discount),
       },
       {
         // Leaving the screen is the receipt. The list behind it has already
@@ -1031,11 +1131,17 @@ export const OrderComposer = ({
 
       <OrderSummary
         cart={cart}
+        discount={discount}
         error={error}
+        gross={gross}
         isPending={isPending}
         legs={legs}
         messages={messages}
         onCheckout={handleCheckout}
+        onDiscount={(next) => {
+          setError(null);
+          setDiscount(next);
+        }}
         onLegAmount={(index, next) => patchLeg(index, { amount: next })}
         onLegMethod={(index, next) => patchLeg(index, { method: next })}
         onLegTill={(index, next) => patchLeg(index, { till: next })}

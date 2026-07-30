@@ -10,6 +10,12 @@ import {
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { LayersIcon } from "lucide-react";
 import { useState } from "react";
+import {
+  type DiscountDraft,
+  discountOf,
+  emptyDiscount,
+  toDiscountRequest,
+} from "@/lib/discount";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useAddMembership } from "../api";
 import {
@@ -95,19 +101,30 @@ export const ManageSubscriptionDialog = ({
   const [planId, setPlanId] = useState(NO_PLAN);
   const [startsAt, setStartsAt] = useState(todayIso);
   const [legs, setLegs] = useState<PaymentLeg[]>(firstLeg);
+  /** What was typed into the discount box — a rate or a figure, as typed. */
+  const [discount, setDiscount] = useState<DiscountDraft>(emptyDiscount);
   const [error, setError] = useState<string | null>(null);
 
   const addMembership = useAddMembership();
 
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null;
   const listPrice = Number(selectedPlan?.price ?? 0);
-  const { applied, debt, paid, total } = settlementOf(listPrice, legs);
+  // Off the plan's price before the legs are walked, so the qoldiq on screen is
+  // the discounted one. The server resolves it again from the plan's own price.
+  const discountTaken = discountOf(listPrice, discount);
+  const { applied, debt, paid, total } = settlementOf(
+    listPrice - discountTaken,
+    legs
+  );
   const shown = visibleLegCount(listPrice, legs);
 
   const pickPlan = (next: string) => {
     setPlanId(next);
     // Renewing stacks behind what they hold; adding starts today.
     setStartsAt(member ? suggestedStart(member, next) : todayIso());
+    // "20,000 off" carried onto a cheaper plan is a bigger discount than the desk
+    // agreed to, so a new plan starts at full price.
+    setDiscount(emptyDiscount());
   };
 
   const setLeg = (
@@ -121,6 +138,7 @@ export const ManageSubscriptionDialog = ({
     setPlanId(NO_PLAN);
     setStartsAt(todayIso());
     setLegs(firstLeg);
+    setDiscount(emptyDiscount());
     setError(null);
     onOpenChange(false);
   };
@@ -138,6 +156,8 @@ export const ManageSubscriptionDialog = ({
           planId,
           startsAt,
           payments: toPayments(legs.slice(0, shown)),
+          // The rate or figure as entered; the server resolves the money.
+          discount: toDiscountRequest(discount),
         },
         memberId: member.id,
       },
@@ -194,8 +214,11 @@ export const ManageSubscriptionDialog = ({
           applied={applied}
           debt={debt}
           disabled={addMembership.isPending}
+          discount={discount}
+          discountTaken={discountTaken}
           legs={legs}
           messages={messages}
+          onDiscount={setDiscount}
           onLegAmount={(index, amount) => setLeg(index, { amount })}
           onLegMethod={(index, method) => setLeg(index, { method })}
           onLegTill={(index, till) => setLeg(index, { till })}

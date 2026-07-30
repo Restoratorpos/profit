@@ -870,7 +870,7 @@ export const OrderEditSheet = ({
           />
         </div>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-4">
           {orderGroups.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {messages["orders.settledNote"]}

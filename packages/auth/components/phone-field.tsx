@@ -109,10 +109,7 @@ export const PhoneField = ({
               size="sm"
             >
               <SelectValue>
-                <FlagIcon
-                  className="h-4 w-6 shrink-0"
-                  code={country.code}
-                />
+                <FlagIcon className="h-4 w-6 shrink-0" code={country.code} />
                 <span className="text-foreground">+{country.dialCode}</span>
               </SelectValue>
             </SelectTrigger>
@@ -120,10 +117,7 @@ export const PhoneField = ({
               <SelectGroup>
                 {COUNTRIES.map((option: Country) => (
                   <SelectItem key={option.code} value={option.code}>
-                    <FlagIcon
-                      className="h-4 w-6 shrink-0"
-                      code={option.code}
-                    />
+                    <FlagIcon className="h-4 w-6 shrink-0" code={option.code} />
                     <span>{option.name}</span>
                     <span className="text-muted-foreground">
                       +{option.dialCode}

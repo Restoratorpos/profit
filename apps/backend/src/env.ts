@@ -64,6 +64,15 @@ const envSchema = z.object({
   // request the browser makes. Only used to configure the device.
   DEVICE_CALLBACK_HOST: z.string().optional(),
   DEVICE_CALLBACK_PORT: z.coerce.number().int().positive().optional(),
+  /**
+   * Which gym's terminals this server is standing next to.
+   *
+   * Set it and every one of that gym's terminals is re-told where to push on
+   * boot, so a moved address heals itself instead of silently ending attendance.
+   * Left unset, nothing is re-applied — which is the right default for a server
+   * that is not on the same LAN as any terminal.
+   */
+  DEVICE_GYM_ID: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
