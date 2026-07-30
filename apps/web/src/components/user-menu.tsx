@@ -14,8 +14,8 @@ import {
 } from "@repo/design-system/components/ui/dropdown-menu";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { LogOutIcon } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { LogOutIcon, ScanFaceIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import type { Messages } from "@/lib/i18n/dictionary";
 
@@ -91,6 +91,23 @@ export const UserMenu = ({ messages }: UserMenuProperties) => {
             </span>
           </div>
         </div>
+
+        <DropdownMenuSeparator />
+
+        {/*
+         * Terminals live here rather than in the sidebar: they are configured
+         * once when a device is hung on the wall and then never touched, so a
+         * permanent slot in a nav the desk reads all day was spending prime
+         * space on a yearly errand.
+         */}
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild className="gap-2">
+            <Link to="/devices">
+              <ScanFaceIcon className="size-4" />
+              <span>{messages["nav.devices"]}</span>
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
 
         <DropdownMenuSeparator />
 

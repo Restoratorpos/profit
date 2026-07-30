@@ -69,6 +69,39 @@ describe("app shell", () => {
   });
 });
 
+describe("sidebar", () => {
+  const source = readFileSync(
+    join(
+      process.cwd(),
+      "../../packages/design-system/components/ui/sidebar.tsx"
+    ),
+    "utf8"
+  );
+
+  it("scrolls the nav when it outgrows a short viewport", () => {
+    expect(source).toContain("min-h-0 flex-1 flex-col gap-0 overflow-y-auto");
+  });
+
+  it("keeps scrolling while collapsed to icons", () => {
+    /*
+     * It used to clip both axes there. The intent was only to stop the labels
+     * sliding out sideways, but `overflow-hidden` took the vertical scroll with
+     * it, so on a short screen the last destinations were unreachable in icon
+     * mode — visible in the expanded width and gone in the narrow one.
+     */
+    expect(source).toContain("group-data-[collapsible=icon]:overflow-x-hidden");
+    expect(source).not.toContain(
+      "group-data-[collapsible=icon]:overflow-hidden"
+    );
+  });
+
+  it("anchors the header and footer so the nav is what scrolls", () => {
+    // Without `shrink-0` a flex child shrinks by default, so a short viewport
+    // squeezed the brand and the footer instead of scrolling between them.
+    expect(source).toContain('cn("flex shrink-0 flex-col gap-2 p-2"');
+  });
+});
+
 describe("pages", () => {
   it("finds page components to check", () => {
     expect(pageComponents.length).toBeGreaterThan(10);

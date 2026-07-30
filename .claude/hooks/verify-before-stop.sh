@@ -2,9 +2,8 @@
 set -euo pipefail
 # Stop hook: exit 2 forces Claude to keep working until the code typechecks.
 #
-# NOTE: this repo is currently NOT a git repository, so there is no diff to read
-# and the hook cannot tell which workspace was touched. It therefore does nothing
-# until a git history exists. Run `git init` and this starts working.
+# Reads the diff to decide which workspaces to check, so it needs a git history.
+# The repo has one now; the guard below stays for worktrees that do not.
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 0
@@ -24,10 +23,12 @@ if echo "$CHANGED" | grep -q '^apps/backend/'; then
   fi
 fi
 
-if echo "$CHANGED" | grep -qE '^(apps/app/|packages/)'; then
-  if ! pnpm --filter app typecheck >/tmp/tc-app.log 2>&1; then
-    echo "--- apps/app typecheck ---" >&2
-    grep -E 'error TS' /tmp/tc-app.log | head -10 >&2 || tail -5 /tmp/tc-app.log >&2
+# `packages/` too: apps/web consumes them as source, so a package edit is only
+# ever proven by typechecking the app that imports it.
+if echo "$CHANGED" | grep -qE '^(apps/web/|packages/)'; then
+  if ! pnpm --filter web typecheck >/tmp/tc-web.log 2>&1; then
+    echo "--- apps/web typecheck ---" >&2
+    grep -E 'error TS' /tmp/tc-web.log | head -10 >&2 || tail -5 /tmp/tc-web.log >&2
     FAILED="yes"
   fi
 fi

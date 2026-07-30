@@ -38,9 +38,10 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
 
-  // Shared with apps/app, which calls this API server-to-server on behalf of a
-  // signed-in user. Optional so the server still boots without it; the routes
-  // that need it refuse to serve until it is set (see middleware/service.ts).
+  // Was shared with apps/app, which called this API server-to-server on behalf
+  // of a signed-in user. **apps/app was deleted on 2026-07-29 and nothing uses
+  // this any more** — a holder of this token can name any gym via `x-gym-id`,
+  // so it should come out. See middleware/caller.ts for what removing it takes.
   SERVICE_TOKEN: z.string().min(16).optional(),
 
   // Comma-separated list of browser origins allowed to call this API.

@@ -18,6 +18,7 @@ import {
   branches,
   credentials,
   expenses,
+  gyms,
   ID_LENGTH,
   workers,
 } from "../db/schema.js";
@@ -41,6 +42,7 @@ import type {
   AttendanceMarkInput,
   CreateWorkerInput,
   PayWorkerInput,
+  SalaryHistoryQueryInput,
   UpdateWorkerInput,
   WorkerQueryInput,
 } from "../schemas/worker.js";
@@ -1037,4 +1039,154 @@ export const checkOut = async (
       createdAt: new Date(),
     });
   });
+};
+
+/** One wage handed over, as the salary-history screen lists it. */
+export interface SalaryHistoryRow {
+  amount: string;
+  id: number;
+  /** The till it came out of: "cash", "card" or "transfer". */
+  method: string;
+  note: string | null;
+  /** When the money moved. */
+  paidAt: string | null;
+  /** The "YYYY-MM" it settles, or null for a wage typed on the cashbox. */
+  period: string | null;
+  workerId: string | null;
+  /** Null only if the worker row was deleted out from under the expense. */
+  workerName: string | null;
+}
+
+export interface SalaryHistoryPage {
+  /**
+   * Every worker who has ever been paid — the filter's options, by name.
+   *
+   * Deliberately not narrowed by the range or by the worker filter. An options
+   * list that shrank to the one name you just picked would strand you there
+   * with no way back to "everyone", and one that emptied along with the date
+   * range would read as "this gym has no staff".
+   */
+  options: { id: string; name: string }[];
+  rows: SalaryHistoryRow[];
+  /** Rows matching the filter, not just the ones on this page. */
+  total: number;
+  /** What those rows add up to — the whole filter, not the page. */
+  totalAmount: string;
+}
+
+/** Wages only, never voided, inside the range, optionally one worker's. */
+const salaryHistoryWhere = (
+  gymId: string,
+  range: DateRange,
+  workerId: string | undefined
+) =>
+  and(
+    eq(expenses.gymId, gymId),
+    eq(expenses.category, SALARY_CATEGORY),
+    isNull(expenses.voidedAt),
+    gte(expenses.paidAt, range.from),
+    lte(expenses.paidAt, range.to),
+    workerId ? eq(expenses.workerId, workerId) : undefined
+  );
+
+/**
+ * Every wage the gym has handed over, across all staff.
+ *
+ * The totals are computed in SQL over the whole filter rather than summed from
+ * `rows`, because `rows` is one page — adding up what is on screen would make
+ * the total change as you page, which is the sort of number a desk stops
+ * trusting.
+ */
+export const listSalaryPayments = async (
+  gymId: string,
+  range: DateRange,
+  query: SalaryHistoryQueryInput
+): Promise<SalaryHistoryPage> => {
+  const where = salaryHistoryWhere(gymId, range, query.workerId);
+
+  const [rows, totals, options] = await Promise.all([
+    db
+      .select({
+        actionId: expenses.actionId,
+        amount: expenses.amount,
+        id: expenses.id,
+        method: expenses.method,
+        note: expenses.note,
+        paidAt: expenses.paidAt,
+        workerId: expenses.workerId,
+        workerName: workers.fullname,
+      })
+      .from(expenses)
+      .leftJoin(workers, eq(workers.workerId, expenses.workerId))
+      .where(where)
+      .orderBy(desc(expenses.paidAt), desc(expenses.id))
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize),
+    db
+      .select({
+        count: sql<number>`COUNT(*)`,
+        sum: sql<string>`SUM(${expenses.amount})`,
+      })
+      .from(expenses)
+      .where(where),
+    db
+      .selectDistinct({ id: expenses.workerId, name: workers.fullname })
+      .from(expenses)
+      .innerJoin(workers, eq(workers.workerId, expenses.workerId))
+      .where(
+        and(
+          eq(expenses.gymId, gymId),
+          eq(expenses.category, SALARY_CATEGORY),
+          isNull(expenses.voidedAt)
+        )
+      )
+      .orderBy(asc(workers.fullname)),
+  ]);
+
+  return {
+    options: options.flatMap((row) =>
+      row.id ? [{ id: row.id, name: row.name ?? row.id }] : []
+    ),
+    rows: rows.map((row) => ({
+      amount: toMoney(row.amount),
+      id: row.id,
+      method: row.method,
+      note: row.note,
+      paidAt: toIso(row.paidAt),
+      period: salaryPeriodOf(row.actionId),
+      workerId: row.workerId,
+      workerName: row.workerName,
+    })),
+    total: Number(totals[0]?.count ?? 0),
+    totalAmount: toMoney(totals[0]?.sum ?? 0),
+  };
+};
+
+/**
+ * The day of the month the gym settles monthly salaries on, or null when the
+ * desk has never chosen one.
+ *
+ * It lives on `gyms` rather than on each worker because it is a policy of the
+ * business, not of the person — one gym pays everybody on the same day, and a
+ * per-worker copy would be thirty rows to keep in step for a single decision.
+ */
+export const getPayday = async (gymId: string): Promise<number | null> => {
+  const [row] = await db
+    .select({ payday: gyms.payday })
+    .from(gyms)
+    .where(eq(gyms.gymId, gymId))
+    .limit(1);
+
+  if (!row) {
+    throw new NotFoundError("Gym not found");
+  }
+
+  return row.payday ?? null;
+};
+
+export const setPayday = async (
+  gymId: string,
+  payday: number
+): Promise<void> => {
+  await db.update(gyms).set({ payday }).where(eq(gyms.gymId, gymId));
 };

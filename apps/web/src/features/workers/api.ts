@@ -5,8 +5,10 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiFetch, apiPatch, apiPost } from "@/lib/api/client";
+import { apiFetch, apiPatch, apiPost, apiPut } from "@/lib/api/client";
 import type {
+  SalaryHistoryPage,
+  SalaryHistoryQuery,
   SalaryPaymentInput,
   WorkerDetail,
   WorkerListItem,
@@ -14,11 +16,14 @@ import type {
   WorkerPayroll,
   WorkerQuery,
 } from "./types";
+import { ALL_WORKERS } from "./types";
 
 export interface RangeBounds {
   from: string;
   to: string;
 }
+
+const paydayKey = ["workers", "payday"] as const;
 
 export const workerKeys = {
   all: ["workers"] as const,
@@ -28,6 +33,8 @@ export const workerKeys = {
     [...workerKeys.all, workerId, "detail", bounds] as const,
   payroll: (workerId: string, period: string) =>
     [...workerKeys.all, workerId, "payroll", period] as const,
+  payments: (query: SalaryHistoryQuery, bounds: RangeBounds) =>
+    [...workerKeys.all, "payments", query, bounds] as const,
 };
 
 export interface WorkerInput {
@@ -112,6 +119,73 @@ export const useWorkerPayroll = (workerId: string | null, period: string) =>
       ),
     enabled: workerId !== null,
   });
+
+const toPaymentsQuery = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds
+): string => {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+
+  if (bounds.from) {
+    params.set("from", bounds.from);
+  }
+
+  if (bounds.to) {
+    params.set("to", bounds.to);
+  }
+
+  // The sentinel means "everyone", which the backend spells as no filter.
+  if (query.workerId !== ALL_WORKERS) {
+    params.set("workerId", query.workerId);
+  }
+
+  return params.toString();
+};
+
+/**
+ * Every wage the gym has handed over, newest first.
+ *
+ * `enabled` is the drawer's open state: this is a whole-gym read behind a
+ * button, and fetching it on every staff-page render would make the page pay
+ * for a panel most visits never open.
+ */
+export const useSalaryHistory = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds,
+  enabled: boolean
+) =>
+  useQuery({
+    queryKey: workerKeys.payments(query, bounds),
+    queryFn: () =>
+      apiFetch<SalaryHistoryPage>(
+        `/workers/payments?${toPaymentsQuery(query, bounds)}`
+      ),
+    enabled,
+    // Holds the table steady while a new filter loads, like the staff list.
+    placeholderData: keepPreviousData,
+  });
+
+/**
+ * The day of the month monthly salaries are settled on, or null when nobody has
+ * chosen one. A gym-wide setting, so it is keyed by nothing but itself.
+ */
+export const usePayday = () =>
+  useQuery({
+    queryKey: paydayKey,
+    queryFn: () => apiFetch<{ payday: number | null }>("/workers/payday"),
+  });
+
+export const useSetPayday = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payday: number) => apiPut<void>("/workers/payday", { payday }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: paydayKey }),
+  });
+};
 
 const useInvalidateWorkers = () => {
   const queryClient = useQueryClient();

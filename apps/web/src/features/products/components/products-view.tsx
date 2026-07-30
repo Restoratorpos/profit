@@ -547,7 +547,7 @@ export const ProductsView = ({
         you are looking at, how to find something in it, and the two ways to add
         to it. Search sits between them because it is the control that gets used
         most, and it takes the slack that used to be an empty half-row above the
-        buttons.
+        buttons.8
 
         The second is what the current tab is showing — narrowed how, and adding
         up to what. It is a caption for the table rather than a panel of its own,

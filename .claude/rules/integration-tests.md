@@ -56,37 +56,57 @@ curl -s localhost:7090/categories \
 | feature route, valid bearer token | `200`, scoped to the token's `gymId` |
 | feature route, valid bearer **+ hostile `x-gym-id`** | `200`, still the token's gym — the header is inert |
 | feature route, **invalid** bearer + valid `x-service-token` | `401` — a bad token must not fall back to service trust |
-| feature route, `x-service-token` + `x-gym-id` | `200` (works until Phase 5 deletes `apps/app`) |
+| feature route, `x-service-token` + `x-gym-id` | `200` — **nothing legitimate uses this any more**; see the note below |
 | feature route, no credentials at all | `401` |
 
 These are covered offline by `apps/backend/__tests__/caller-auth.test.ts`, which
 needs no server and no database — run that first; the curl matrix only adds
 confidence that real credentials and a real DB behave the same.
 
+### `x-service-token` is now an open door with nobody behind it
+
+`requireService` exists because `apps/app` called this API server-to-server on
+behalf of an already-authenticated user: a shared secret plus a **client-supplied
+`x-gym-id`**. That is only safe with a trusted server in front deciding the gym.
+
+**`apps/app` was deleted on 2026-07-29 and nothing uses this path any more.**
+Until it is removed, anyone holding `SERVICE_TOKEN` can read or write *any*
+tenant by setting a header. Retiring it means dropping `requireService` from
+`middleware/caller.ts`, deleting `middleware/service.ts` and `SERVICE_TOKEN`
+from `env.ts`, and updating `caller-auth.test.ts`.
+
 ## Verifying web auth end to end
 
-The app runs on **:3000**. Auth.js requires a CSRF token, so a scripted login is two steps:
+The SPA runs on **:3001**. There is no CSRF dance and no server session —
+`apps/web` calls the backend directly, so a scripted login is one request:
 
 ```bash
-csrf=$(curl -s -c jar.txt localhost:3000/api/auth/csrf | sed -n 's/.*"csrfToken":"\([^"]*\)".*/\1/p')
-
-curl -s -b jar.txt -c jar.txt -o /dev/null -w "%{http_code} %{redirect_url}\n" \
-  -X POST localhost:3000/api/auth/callback/credentials \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "csrfToken=$csrf" \
-  --data-urlencode "phone=998907661770" --data-urlencode "password=1111"
-
-curl -s -b jar.txt localhost:3000/api/auth/session
+curl -s -c jar.txt -X POST localhost:7090/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"998907661770","password":"1111","mode":"cookie"}'
 ```
 
-A successful login is `302 → /` with an `authjs.session-token` cookie, and the session's `user.id` is the **nanoid from MySQL** — if it is anything else, the credentials provider is not actually reaching the backend.
+`mode: "cookie"` is what the browser sends: the access token comes back in the
+JSON body and the refresh token in an **httpOnly cookie** (in `jar.txt`), which
+is why the access token can be kept in memory only. The `id` in the body is the
+**nanoid from MySQL** — anything else means the login is not reaching the DB.
 
-## Redirect matrix worth re-checking after touching `authorized`
+Then check the cookie alone can re-mint a session, which is what a page reload
+does:
+
+```bash
+curl -s -b jar.txt -X POST localhost:7090/auth/refresh
+```
+
+## Redirect matrix worth re-checking after touching `_authed`
+
+Enforced client-side by the `_authed` layout route, so these are browser
+navigations rather than HTTP status codes — there is no server to answer them.
 
 | Request | Expected |
 |---|---|
-| signed out → `/search` | `307` → `/sign-in?callbackUrl=…` |
-| signed out → `/sign-in` | `200`, form renders |
-| signed in → `/sign-in` | `302` → `/` |
-| signed in → `/sign-in?callbackUrl=/search` | `302` → `/search` |
-| signed in → `/sign-in?callbackUrl=https://evil.com` | `302` → `/` (**never** off-origin) |
+| signed out → `/members` | redirected to `/sign-in?callbackUrl=…` |
+| signed out → `/sign-in` | form renders |
+| signed in → `/sign-in` | redirected to `/` |
+| signed in → `/sign-in?callbackUrl=/members` | lands on `/members` |
+| signed in → `/sign-in?callbackUrl=https://evil.com` | lands on `/` (**never** off-origin) |

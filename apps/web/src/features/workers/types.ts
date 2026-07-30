@@ -109,6 +109,7 @@ export const formatHours = (minutes: number): string => {
 };
 
 export const RANGE_PRESETS = [
+  "all-time",
   "this-month",
   "last-month",
   "last-30",
@@ -116,6 +117,17 @@ export const RANGE_PRESETS = [
 ] as const;
 
 export type RangePreset = (typeof RANGE_PRESETS)[number];
+
+/**
+ * Where "all time" starts.
+ *
+ * A fixed date rather than an open-ended query, because the range is what every
+ * figure on the staff table is computed over — `earnedOver` prorates a monthly
+ * salary across the days in range, so an unbounded start would accrue wages
+ * back to the epoch and turn every balance into nonsense. This is the date the
+ * gym's books begin.
+ */
+export const ALL_TIME_START = "2026-01-01";
 
 /** `"YYYY-MM-DD"` from a Date, local time. */
 export const toDateInput = (date: Date): string => {
@@ -134,6 +146,10 @@ export const rangeForPreset = (
   preset: RangePreset,
   now = new Date()
 ): { from: string; to: string } => {
+  if (preset === "all-time") {
+    return { from: ALL_TIME_START, to: toDateInput(now) };
+  }
+
   if (preset === "last-month") {
     const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const to = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -353,3 +369,71 @@ export interface WorkerPage {
   rows: WorkerListItem[];
   total: number;
 }
+
+/** How a preset reads on screen. Shared by the staff table and the history drawer. */
+export const RANGE_LABEL: Record<RangePreset, MessageKey> = {
+  "all-time": "workers.rangeAllTime",
+  "this-month": "workers.rangeThisMonth",
+  "last-month": "workers.rangeLastMonth",
+  "last-30": "workers.rangeLast30",
+  custom: "workers.rangeCustom",
+};
+
+/** The label for a till, matching the three buttons the pay window offers. */
+export const salaryMethodLabelKey = (method: string): MessageKey => {
+  if (method === "card") {
+    return "workers.payCard";
+  }
+
+  if (method === "transfer") {
+    return "workers.payTransfer";
+  }
+
+  return "workers.payCash";
+};
+
+/** One wage handed over, as the salary-history drawer lists it. */
+export interface SalaryHistoryRow {
+  amount: string;
+  id: number;
+  method: string;
+  note: string | null;
+  /** When the money moved — not the month it settles. */
+  paidAt: string | null;
+  /** "YYYY-MM", or null for a wage typed on the cashbox screen. */
+  period: string | null;
+  workerId: string | null;
+  workerName: string | null;
+}
+
+/** Mirrors the backend's `SalaryHistoryPage`. */
+export interface SalaryHistoryPage {
+  /** Everyone who has ever been paid — the worker filter's options. */
+  options: { id: string; name: string }[];
+  rows: SalaryHistoryRow[];
+  /** Rows matching the filter, not just this page. */
+  total: number;
+  /** What those rows add up to, over the whole filter. */
+  totalAmount: string;
+}
+
+/**
+ * "Everyone" — the worker filter's default.
+ *
+ * A sentinel rather than an empty string because Radix's `Select` reserves `""`
+ * for "nothing is chosen" and throws on an item that uses it. The query builder
+ * translates it back to "send no workerId at all".
+ */
+export const ALL_WORKERS = "all";
+
+export interface SalaryHistoryQuery {
+  page: number;
+  pageSize: number;
+  workerId: string;
+}
+
+export const DEFAULT_SALARY_HISTORY_QUERY: SalaryHistoryQuery = {
+  page: 1,
+  pageSize: 25,
+  workerId: ALL_WORKERS,
+};

@@ -331,7 +331,9 @@ function SidebarInput({
 function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex flex-col gap-2 p-2", className)}
+      // `shrink-0`, or a short viewport squeezes the brand and the collapse
+      // control instead of scrolling the nav between them.
+      className={cn("flex shrink-0 flex-col gap-2 p-2", className)}
       data-sidebar="header"
       data-slot="sidebar-header"
       {...props}
@@ -342,7 +344,8 @@ function SidebarHeader({ className, ...props }: React.ComponentProps<"div">) {
 function SidebarFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex flex-col gap-2 p-2", className)}
+      // Same reason as the header: it anchors the column, the nav scrolls.
+      className={cn("flex shrink-0 flex-col gap-2 p-2", className)}
       data-sidebar="footer"
       data-slot="sidebar-footer"
       {...props}
@@ -368,7 +371,15 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "no-scrollbar flex min-h-0 flex-1 flex-col gap-0 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        /*
+         * The nav scrolls when it outgrows the viewport, in both widths.
+         *
+         * `overflow-x-hidden` rather than `overflow-hidden` in icon mode: the
+         * point there is to clip the labels sliding out sideways, but hiding
+         * both axes also killed vertical scrolling, so on a short screen the
+         * last few destinations were simply unreachable while collapsed.
+         */
+        "flex min-h-0 flex-1 flex-col gap-0 overflow-y-auto group-data-[collapsible=icon]:overflow-x-hidden",
         className
       )}
       data-sidebar="content"

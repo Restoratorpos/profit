@@ -8,7 +8,6 @@ import {
   CommandItem,
   CommandList,
 } from "@repo/design-system/components/ui/command";
-import { Input } from "@repo/design-system/components/ui/input";
 import {
   InputGroup,
   InputGroupAddon,
@@ -20,11 +19,12 @@ import {
   PopoverTrigger,
 } from "@repo/design-system/components/ui/popover";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { useNavigate } from "@tanstack/react-router";
 import {
   BanknoteIcon,
+  ChevronLeftIcon,
   ClockIcon,
   CoffeeIcon,
   CreditCardIcon,
@@ -35,12 +35,12 @@ import {
   SearchIcon,
   ShoppingBagIcon,
   ShoppingCartIcon,
-  SparklesIcon,
   Trash2Icon,
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import { readableTextOn } from "@/features/products/types";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -54,6 +54,7 @@ import {
   type OrderCheckoutType,
   type OrderCustomer,
   type PaymentLeg,
+  type PosCategory,
   type PosProduct,
   settlementOf,
   type Till,
@@ -168,7 +169,7 @@ const PaymentLegFields = ({
           return (
             <Button
               aria-checked={active}
-              className={cn("h-14 flex-col gap-1", active && SELECTED_FILL)}
+              className={cn("h-14 flex-col gap-1", active && SELECTED_TINT)}
               disabled={disabled}
               key={option.value}
               onClick={() => onMethod(option.value)}
@@ -188,12 +189,11 @@ const PaymentLegFields = ({
           The final leg shows the rest as a fact rather than a field: read-only,
           and no "Hammasi" to press, because there is nothing else it could be. */}
       <div className="flex gap-2">
-        <Input
+        <MoneyInput
           aria-label={messages["orders.amountLabel"]}
           className={cn("flex-1", isFixed && "text-muted-foreground")}
           disabled={disabled || !canType}
-          inputMode="decimal"
-          onChange={(event) => onAmount(event.target.value)}
+          onChange={onAmount}
           placeholder={
             // A qarz's blank box takes nothing; a till's takes whatever is left.
             canType && leg.method !== "debt"
@@ -230,7 +230,7 @@ const PaymentLegFields = ({
             return (
               <Button
                 aria-checked={active}
-                className={cn(active && SELECTED_FILL)}
+                className={cn(active && SELECTED_TINT)}
                 disabled={disabled}
                 key={option.value}
                 onClick={() => onTill(option.value)}
@@ -349,7 +349,7 @@ const ProductTile = ({
           : product.name
       }
       className={cn(
-        "relative h-28 flex-col items-start justify-between rounded-xl p-4 text-left",
+        "relative h-28 flex-col items-center justify-center gap-1.5 rounded-xl p-4 text-center",
         color ? "border-transparent hover:opacity-90" : "bg-card"
       )}
       onClick={() => onAdd(product)}
@@ -357,13 +357,11 @@ const ProductTile = ({
       type="button"
       variant="outline"
     >
-      <span className="flex w-full items-start justify-between gap-1">
-        <span className="line-clamp-2 whitespace-normal font-semibold text-base">
-          {product.name}
-        </span>
-        {product.kind === "combo" ? (
-          <SparklesIcon className="size-4 shrink-0 opacity-70" />
-        ) : null}
+      {/* Name over price, both centred, and no combo icon: a bundle rings up the
+          same way a product does, so the mark was decoration on the one thing the
+          operator has to read at a glance. */}
+      <span className="line-clamp-2 whitespace-normal font-semibold text-base">
+        {product.name}
       </span>
       <span className="text-sm opacity-90">{formatMoney(product.price)}</span>
 
@@ -375,6 +373,44 @@ const ProductTile = ({
           {quantity}
         </span>
       ) : null}
+    </Button>
+  );
+};
+
+/**
+ * A category as a tile: the same footprint as a product, so the grid reads as one
+ * wall of buttons rather than two.
+ *
+ * Nothing on it but its name, centred. Carrying no price is what tells it from a
+ * sellable tile — the count of what was inside is a number the desk never acts
+ * on, and in the second line's position it read as one more price.
+ */
+const CategoryTile = ({
+  category,
+  onOpen,
+}: {
+  category: PosCategory;
+  onOpen: () => void;
+}) => {
+  const color = category.color;
+  const style = color
+    ? { backgroundColor: color, color: readableTextOn(color) }
+    : undefined;
+
+  return (
+    <Button
+      className={cn(
+        "h-28 flex-col items-center justify-center rounded-xl p-4 text-center",
+        color ? "border-transparent hover:opacity-90" : "bg-card"
+      )}
+      onClick={onOpen}
+      style={style}
+      type="button"
+      variant="outline"
+    >
+      <span className="line-clamp-3 whitespace-normal font-semibold text-base">
+        {category.name}
+      </span>
     </Button>
   );
 };
@@ -463,7 +499,15 @@ const OrderSummary = ({
   const shown = visibleLegCount(total, legs);
 
   return (
-    <aside className="flex w-full flex-col gap-4 rounded-2xl border p-5 lg:w-96">
+    /*
+     * `lg:self-start` keeps the card the height of what is in it. As a column of
+     * a full-height row it would otherwise stretch to the bottom of the screen,
+     * which is a lot of border around nothing on a two-line order.
+     *
+     * `lg:shrink-0` so a wide product grid cannot squeeze it — the amount box and
+     * the four payment buttons need their width more than the tiles do.
+     */
+    <aside className="flex w-full flex-col gap-4 rounded-2xl border p-5 lg:w-96 lg:shrink-0 lg:self-start">
       <h2 className="flex items-center gap-2 font-semibold text-lg">
         <ShoppingCartIcon className="size-5 text-primary-accent" />
         {messages["orders.summaryTitle"]}
@@ -578,12 +622,15 @@ const OrderSummary = ({
 };
 
 interface OrderComposerProperties {
+  /** Every category in the catalog; the grid shows the ones with tiles in them. */
+  categories: readonly PosCategory[];
   customers: readonly OrderCustomer[];
   messages: Messages;
   products: readonly PosProduct[];
 }
 
 export const OrderComposer = ({
+  categories,
   customers,
   messages,
   products,
@@ -614,6 +661,82 @@ export const OrderComposer = ({
       return needle.length === 0 || product.name.toLowerCase().includes(needle);
     });
   }, [productType, products, query]);
+
+  /**
+   * What the grid is showing: the categories, or inside one of them.
+   *
+   * Reset whenever the tab changes, because a category that has bar products need
+   * not have shop ones — staying open would show an empty grid and no reason why.
+   */
+  const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
+
+  const openTab = (next: "bar" | "shop") => {
+    setProductType(next);
+    setOpenCategoryId(null);
+  };
+
+  /*
+   * Searching cuts across the grouping. A query is the desk saying "I know what
+   * it is called, find it" — making them guess which category it was filed under
+   * first is the slower path to the same tile, so matches come back flat.
+   */
+  const isSearching = query.trim().length > 0;
+
+  const { grouped, loose } = useMemo(() => {
+    const byCategory = new Map<string, PosProduct[]>();
+    const withoutCategory: PosProduct[] = [];
+
+    for (const product of visibleProducts) {
+      if (product.categoryId === null) {
+        withoutCategory.push(product);
+        continue;
+      }
+
+      const bucket = byCategory.get(product.categoryId);
+
+      if (bucket) {
+        bucket.push(product);
+      } else {
+        byCategory.set(product.categoryId, [product]);
+      }
+    }
+
+    return { grouped: byCategory, loose: withoutCategory };
+  }, [visibleProducts]);
+
+  /*
+   * Only categories with something in them, in the order the catalog lists them —
+   * a tile that opens onto nothing is a dead end, and on this tab most of them
+   * will be empty.
+   *
+   * A product whose category was deleted, or which arrived before the categories
+   * did, has an id matching nothing here; it falls through to the loose row below
+   * rather than disappearing.
+   */
+  const shownCategories = useMemo(
+    () => categories.filter((category) => grouped.has(category.id)),
+    [categories, grouped]
+  );
+
+  const knownCategoryIds = useMemo(
+    () => new Set(categories.map((category) => category.id)),
+    [categories]
+  );
+
+  const looseProducts = useMemo(
+    () =>
+      loose.concat(
+        visibleProducts.filter(
+          (product) =>
+            product.categoryId !== null &&
+            !knownCategoryIds.has(product.categoryId)
+        )
+      ),
+    [knownCategoryIds, loose, visibleProducts]
+  );
+
+  const openCategory =
+    categories.find((category) => category.id === openCategoryId) ?? null;
 
   const total = useMemo(
     () =>
@@ -725,6 +848,98 @@ export const OrderComposer = ({
     );
   };
 
+  /** One wall of tiles, whatever it is showing. */
+  const tileGrid = (children: ReactNode) => (
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
+      {children}
+    </div>
+  );
+
+  const productTiles = (list: readonly PosProduct[]) =>
+    list.map((product) => (
+      <ProductTile
+        key={product.id}
+        messages={messages}
+        onAdd={addToCart}
+        product={product}
+        quantity={quantityById.get(product.id) ?? 0}
+      />
+    ));
+
+  /**
+   * Categories first, then what is not in one; or the inside of a category; or,
+   * while searching, every match at once.
+   */
+  const renderGrid = () => {
+    if (visibleProducts.length === 0) {
+      return (
+        <p className="rounded-xl border py-16 text-center text-muted-foreground">
+          {messages["orders.noProducts"]}
+        </p>
+      );
+    }
+
+    if (isSearching) {
+      return tileGrid(productTiles(visibleProducts));
+    }
+
+    if (openCategory) {
+      return (
+        <div className="flex flex-col gap-4">
+          {/* The way back out, showing where you are rather than where it goes —
+              the arrow already says that, and the word "Kategoriyalar" beside the
+              category's own name was the label of the screen twice over. It keeps
+              the word as its accessible name, so the control is still announced
+              as what it does. */}
+          <Button
+            aria-label={messages["categories.title"]}
+            className="w-fit gap-2 pl-2"
+            onClick={() => setOpenCategoryId(null)}
+            type="button"
+            variant="ghost"
+          >
+            <ChevronLeftIcon className="size-4" />
+            <span className="font-semibold text-foreground">
+              {openCategory.name}
+            </span>
+          </Button>
+
+          {tileGrid(productTiles(grouped.get(openCategory.id) ?? []))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-5">
+        {shownCategories.length === 0
+          ? null
+          : tileGrid(
+              shownCategories.map((category) => (
+                <CategoryTile
+                  category={category}
+                  key={category.id}
+                  onOpen={() => setOpenCategoryId(category.id)}
+                />
+              ))
+            )}
+
+        {/* Under the categories, and only labelled when there are categories to
+            be under — with none, every tile is loose and a heading saying so is
+            a heading over the whole screen. */}
+        {looseProducts.length === 0 ? null : (
+          <div className="flex flex-col gap-3">
+            {shownCategories.length === 0 ? null : (
+              <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+                {messages["products.noCategory"]}
+              </p>
+            )}
+            {tileGrid(productTiles(looseProducts))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const types = [
     {
       value: "bar" as const,
@@ -739,98 +954,95 @@ export const OrderComposer = ({
   ];
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
-      {/* The title is read, not displayed. This screen is a till: the operator
-          knows what they opened — the sidebar row they pressed is still lit —
-          and a whole row spent saying so is a row of products they cannot see.
-          Leaving is the sidebar's job too, which is why there is no back arrow:
-          every other way out of this screen is one tap away in the same place. */}
-      <h1 className="sr-only">{messages["orders.newOrder"]}</h1>
+    /*
+     * Two columns from `lg` up, and the summary is a column rather than something
+     * under the product grid — so it starts level with the search rather than a
+     * toolbar's height down the page. The operator watches the running total while
+     * they tap tiles, and a panel that began below the fold was a panel they had
+     * to go and look for.
+     */
+    <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:gap-6">
+      {/* `min-w-0` so a long product name in the grid cannot push the summary
+          off the edge — a flex child defaults to its content's width. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-5">
+        {/* The title is read, not displayed. This screen is a till: the operator
+            knows what they opened — the sidebar row they pressed is still lit —
+            and a whole row spent saying so is a row of products they cannot see.
+            Leaving is the sidebar's job too, which is why there is no back arrow:
+            every other way out of this screen is one tap away in the same place. */}
+        <h1 className="sr-only">{messages["orders.newOrder"]}</h1>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          aria-label={messages["products.fieldType"]}
-          className="flex items-center gap-1 rounded-lg bg-muted p-1"
-          role="radiogroup"
-        >
-          {types.map((type) => {
-            const active = productType === type.value;
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            aria-label={messages["products.fieldType"]}
+            className="flex items-center gap-1 rounded-lg bg-muted p-1"
+            role="radiogroup"
+          >
+            {types.map((type) => {
+              const active = productType === type.value;
 
-            return (
-              <Button
-                aria-checked={active}
-                className={cn("gap-2", !active && "text-muted-foreground")}
-                key={type.value}
-                onClick={() => setProductType(type.value)}
-                role="radio"
-                size="sm"
-                type="button"
-                variant={active ? "default" : "ghost"}
-              >
-                <type.icon className="size-4" />
-                {type.label}
-              </Button>
-            );
-          })}
+              return (
+                <Button
+                  aria-checked={active}
+                  className={cn("gap-2", !active && "text-muted-foreground")}
+                  key={type.value}
+                  onClick={() => openTab(type.value)}
+                  role="radio"
+                  size="sm"
+                  type="button"
+                  variant={active ? "default" : "ghost"}
+                >
+                  <type.icon className="size-4" />
+                  {type.label}
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Takes the space between the tabs and the customer, so the row has no
+              dead middle. It is already bounded by the summary column beside it —
+              the reason this was ever a 1000px box for a one-word query was that
+              the summary used to sit *below* rather than to the right. */}
+          <div className="min-w-48 flex-1">
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <SearchIcon className="size-5" />
+              </InputGroupAddon>
+              <InputGroupInput
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={messages["orders.productSearch"]}
+                value={query}
+              />
+            </InputGroup>
+          </div>
+
+          {/* Last on the row, and the search growing into the space is what keeps
+              it there — it is who is buying, not what is being searched. */}
+          <CustomerPicker
+            customers={customers}
+            messages={messages}
+            onChange={setCustomer}
+            value={customer}
+          />
         </div>
 
-        <div className="min-w-64 flex-1">
-          <InputGroup>
-            <InputGroupAddon align="inline-start">
-              <SearchIcon className="size-5" />
-            </InputGroupAddon>
-            <InputGroupInput
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={messages["orders.productSearch"]}
-              value={query}
-            />
-          </InputGroup>
-        </div>
-
-        <CustomerPicker
-          customers={customers}
-          messages={messages}
-          onChange={setCustomer}
-          value={customer}
-        />
+        {renderGrid()}
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="flex-1">
-          {visibleProducts.length === 0 ? (
-            <p className="rounded-xl border py-16 text-center text-muted-foreground">
-              {messages["orders.noProducts"]}
-            </p>
-          ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
-              {visibleProducts.map((product) => (
-                <ProductTile
-                  key={product.id}
-                  messages={messages}
-                  onAdd={addToCart}
-                  product={product}
-                  quantity={quantityById.get(product.id) ?? 0}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        <OrderSummary
-          cart={cart}
-          error={error}
-          isPending={isPending}
-          legs={legs}
-          messages={messages}
-          onCheckout={handleCheckout}
-          onLegAmount={(index, next) => patchLeg(index, { amount: next })}
-          onLegMethod={(index, next) => patchLeg(index, { method: next })}
-          onLegTill={(index, next) => patchLeg(index, { till: next })}
-          onQty={changeQty}
-          onRemove={removeLine}
-          total={total}
-        />
-      </div>
+      <OrderSummary
+        cart={cart}
+        error={error}
+        isPending={isPending}
+        legs={legs}
+        messages={messages}
+        onCheckout={handleCheckout}
+        onLegAmount={(index, next) => patchLeg(index, { amount: next })}
+        onLegMethod={(index, next) => patchLeg(index, { method: next })}
+        onLegTill={(index, next) => patchLeg(index, { till: next })}
+        onQty={changeQty}
+        onRemove={removeLine}
+        total={total}
+      />
     </div>
   );
 };

@@ -5,6 +5,7 @@ import { setFaceSchema } from "../schemas/device.js";
 import {
   createMemberSchema,
   memberQuerySchema,
+  membershipSaleSchema,
   setMemberActiveSchema,
   updateMemberSchema,
 } from "../schemas/member.js";
@@ -17,9 +18,11 @@ import {
   syncFaceStatus,
 } from "../services/device.service.js";
 import {
+  addMembership,
   createMember,
   deleteMember,
   listMembers,
+  listMemberVisits,
   pageMembers,
   setMemberActive,
   updateMember,
@@ -48,6 +51,34 @@ export const memberRoutes = new Hono<AppEnv>()
 
     return c.json(member, 201);
   })
+  /*
+   * Sells a further membership to an existing member — a spa pass on top of a
+   * gym plan, or next month's renewal stacked behind this month's. Holding
+   * several at once is ordinary here, so this is a plain create against the
+   * member rather than an edit of whatever they already hold.
+   */
+  .post(
+    "/:memberId/memberships",
+    zValidator("json", membershipSaleSchema),
+    async (c) => {
+      await addMembership(
+        c.get("gymId"),
+        c.req.param("memberId"),
+        c.req.valid("json"),
+        c.get("workerId")
+      );
+
+      return c.body(null, 204);
+    }
+  )
+  /*
+   * One member's recent visits, newest first — what the membership dialog
+   * lists. Attributed to the member, not to a plan: `attendance_sessions`
+   * records who came in, never which membership let them.
+   */
+  .get("/:memberId/visits", async (c) =>
+    c.json(await listMemberVisits(c.get("gymId"), c.req.param("memberId")))
+  )
   .patch("/:memberId", zValidator("json", updateMemberSchema), async (c) => {
     await updateMember(
       c.get("gymId"),

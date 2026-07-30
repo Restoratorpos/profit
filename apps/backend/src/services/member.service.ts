@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../db/index.js";
 import {
@@ -21,22 +21,73 @@ import type {
   CreateMemberInput,
   MemberQueryInput,
   MembershipPaymentLeg,
+  MembershipSaleInput,
   UpdateMemberInput,
 } from "../schemas/member.js";
 import { purgeFaceEverywhere } from "./device.service.js";
 
 /** Every query filters by gymId. An unscoped one is a data leak, not a bug. */
 
-/** One plan a member holds, with how many memberships of it they have. */
-export interface MemberPlanBadge {
-  count: number;
+/**
+ * Where one membership stands right now.
+ *
+ * Per membership, never per member. A member can hold a gym plan running out on
+ * Friday and a sauna package good until December, and those two facts do not
+ * reduce to one.
+ */
+export type MembershipState = "active" | "expiring" | "expired";
+
+/**
+ * One membership a member holds, with its own clock.
+ *
+ * This replaced a badge of `{ name, count }` — "Gym ×2" — which said a member
+ * held two gym memberships but nothing about when either ran out. Counting them
+ * was the wrong summary: what the desk needs to see is which one is about to
+ * lapse, and that is a property of the row, not of the pile.
+ */
+export interface MemberMembershipView {
+  /**
+   * What is still owed on *this* membership: `price - paid`, floored at zero.
+   *
+   * The member-wide `membershipDebt` is the sum of these. Kept per membership as
+   * well, because "800,000 owed" across a gym plan paid in full and a sauna
+   * package barely touched does not say which one the desk should chase.
+   */
+  debt: string;
+  endsAt: string | null;
+  id: string;
+  /** The plan's name. There is no category on `plans`, so this is the type. */
   name: string;
+  /** Taken so far against it — the sum of its unvoided `income` rows. */
+  paid: string;
+  /** Which plan it is, so a renewal of the same one can be told from a new one. */
+  planId: string | null;
+  /**
+   * What it was **charged**, which is not the plan's list price: a comp records
+   * what was actually taken, so `price - paid` cannot read as an unpaid sale.
+   * Zero with nothing paid is therefore a gift, not a debt.
+   */
+  price: string;
+  remainingVisits: number | null;
+  startsAt: string | null;
+  state: MembershipState;
+  /** What it was sold with, so "76 of 80" can be read rather than just "76". */
+  totalVisits: number | null;
 }
 
 export interface MemberListItem {
   birthdate: string | null;
   branchId: string | null;
-  /** Earliest start across their memberships. */
+  /**
+   * The **soonest upcoming** expiry across their memberships, or null when none
+   * of them is still running.
+   *
+   * Deliberately the earliest and not the latest. It used to be the latest, and
+   * that hid exactly the thing this column exists to show: a member whose gym
+   * plan lapsed on Friday but who also holds a sauna package until December
+   * read as "December", and never once flagged as expiring. The longest
+   * membership masked the one that needed attention.
+   */
   endsAt: string | null;
   gender: string | null;
   /** True when a face is enrolled on at least one terminal. */
@@ -45,11 +96,10 @@ export interface MemberListItem {
   isActive: boolean;
   /** Owed on memberships: what was sold, minus what has been paid. */
   membershipDebt: string;
+  /** Every membership they hold, each with its own end date and visits. */
+  memberships: MemberMembershipView[];
   name: string;
   phone: string | null;
-  plans: MemberPlanBadge[];
-  /** Visits left across every membership; null when none are visit-counted. */
-  remainingVisits: number | null;
   /** Owed in the shop: unsettled orders. */
   shopDebt: string;
   startsAt: string | null;
@@ -85,35 +135,91 @@ const earlier = (a: Date | null, b: Date | null): Date | null => {
   return a < b ? a : b;
 };
 
-const later = (a: Date | null, b: Date | null): Date | null => {
-  if (!a) {
-    return b;
+/**
+ * How little is left before a membership counts as running out.
+ *
+ * Tuned for the monthly plan this gym sells, which is twenty sessions: five
+ * sessions is roughly the last week of training at three or four visits a week,
+ * and seven days is that same week measured the other way.
+ */
+export const EXPIRING_VISITS = 5;
+export const EXPIRING_DAYS = 7;
+
+const MS_PER_DAY = 86_400_000;
+
+/** Whole days from now until `date`, negative once it is past. */
+const daysUntil = (date: Date, now: Date): number =>
+  Math.ceil((date.getTime() - now.getTime()) / MS_PER_DAY);
+
+/**
+ * Where one membership stands.
+ *
+ * Visits are checked before dates because a visit-counted package is finished
+ * the moment it runs out of entries, whatever its end date says.
+ */
+const stateOf = (
+  endsAt: Date | null,
+  remainingVisits: number | null,
+  now: Date
+): MembershipState => {
+  if (remainingVisits !== null && remainingVisits <= 0) {
+    return "expired";
   }
 
-  if (!b) {
-    return a;
+  const days =
+    endsAt && !Number.isNaN(endsAt.getTime()) ? daysUntil(endsAt, now) : null;
+
+  if (days !== null && days < 0) {
+    return "expired";
   }
 
-  return a > b ? a : b;
+  if (remainingVisits !== null && remainingVisits <= EXPIRING_VISITS) {
+    return "expiring";
+  }
+
+  if (days !== null && days <= EXPIRING_DAYS) {
+    return "expiring";
+  }
+
+  return "active";
 };
 
 interface Aggregate {
-  endsAt: Date | null;
+  held: MemberMembershipView[];
   paid: number;
-  plans: Map<string, number>;
-  remainingVisits: number | null;
   sold: number;
   startsAt: Date | null;
 }
 
 const emptyAggregate = (): Aggregate => ({
-  endsAt: null,
+  held: [],
   paid: 0,
-  plans: new Map(),
-  remainingVisits: null,
   sold: 0,
   startsAt: null,
 });
+
+/**
+ * The soonest expiry still ahead of us, across the memberships a member holds.
+ *
+ * Expired ones are skipped rather than winning by being earliest — the question
+ * is "what needs renewing next", and something that already lapsed is not an
+ * answer to it. Null when nothing is still running.
+ */
+const nextExpiry = (held: MemberMembershipView[]): string | null => {
+  let soonest: string | null = null;
+
+  for (const membership of held) {
+    if (membership.state === "expired" || !membership.endsAt) {
+      continue;
+    }
+
+    if (soonest === null || membership.endsAt < soonest) {
+      soonest = membership.endsAt;
+    }
+  }
+
+  return soonest;
+};
 
 /**
  * The list is built from four grouped queries rather than a query per member:
@@ -139,11 +245,24 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
       startsAt: memberships.startsAt,
       endsAt: memberships.endsAt,
       remainingVisits: memberships.remainingVisits,
+      totalVisits: memberships.totalVisits,
+      planId: memberships.planId,
       planName: plans.plan,
     })
     .from(memberships)
     .leftJoin(plans, eq(memberships.planId, plans.planId))
-    .where(eq(memberships.gymId, gymId));
+    .where(eq(memberships.gymId, gymId))
+    /*
+     * Creation order, oldest first, so the first membership a member was ever
+     * sold stays first in the list. The screen leans on that: the sessions
+     * column reports the main plan — the one they were signed up on — and
+     * everything bought since sits behind it in the badges.
+     *
+     * `membership_id` breaks ties, because a legacy row can carry no
+     * `created_at` at all and two sold in the same second would otherwise
+     * order arbitrarily between reads.
+     */
+    .orderBy(asc(memberships.createdAt), asc(memberships.membershipId));
 
   const membershipIds = membershipRows.map((row) => row.membershipId);
 
@@ -244,6 +363,9 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
     faceRows.map((row) => row.ownerId).filter((id): id is string => Boolean(id))
   );
 
+  // One clock for the whole list, so two members read against the same instant.
+  const now = new Date();
+
   const byMember = new Map<string, Aggregate>();
 
   for (const row of membershipRows) {
@@ -252,22 +374,31 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
     }
 
     const current = byMember.get(row.memberId) ?? emptyAggregate();
+    const price = toNumber(row.price);
+    const paid = paidByMembership.get(row.membershipId) ?? 0;
 
-    current.sold += toNumber(row.price);
-    current.paid += paidByMembership.get(row.membershipId) ?? 0;
+    current.sold += price;
+    current.paid += paid;
     current.startsAt = earlier(current.startsAt, row.startsAt);
-    current.endsAt = later(current.endsAt, row.endsAt);
 
-    if (row.remainingVisits !== null) {
-      current.remainingVisits =
-        (current.remainingVisits ?? 0) + row.remainingVisits;
-    }
-
-    const name = row.planName ?? "";
-
-    if (name.length > 0) {
-      current.plans.set(name, (current.plans.get(name) ?? 0) + 1);
-    }
+    // Kept whole rather than folded together: the end date, the visits left and
+    // what has been paid belong to this membership, and summing them across a
+    // gym plan and a sauna package produces numbers that describe neither.
+    current.held.push({
+      // Floored the same way the member-wide total is: a member who overpaid
+      // one membership is not owed money by this screen.
+      debt: toMoney(Math.max(price - paid, 0)),
+      endsAt: toIsoDate(row.endsAt),
+      id: row.membershipId,
+      name: row.planName ?? "",
+      paid: toMoney(paid),
+      planId: row.planId,
+      price: toMoney(price),
+      remainingVisits: row.remainingVisits,
+      startsAt: toIsoDate(row.startsAt),
+      state: stateOf(row.endsAt, row.remainingVisits, now),
+      totalVisits: row.totalVisits,
+    });
 
     byMember.set(row.memberId, current);
   }
@@ -285,10 +416,11 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
       branchId: row.homeBranch,
       hasFace: enrolled.has(row.memberId),
       isActive: row.status !== "inactive",
-      plans: [...aggregate.plans].map(([name, count]) => ({ name, count })),
+      // Already in creation order — see the query. The first entry is the
+      // membership the member was originally signed up on.
+      memberships: aggregate.held,
       startsAt: toIsoDate(aggregate.startsAt),
-      endsAt: toIsoDate(aggregate.endsAt),
-      remainingVisits: aggregate.remainingVisits,
+      endsAt: nextExpiry(aggregate.held),
       // A credit balance is not a negative debt as far as this screen cares.
       membershipDebt: toMoney(Math.max(aggregate.sold - aggregate.paid, 0)),
       shopDebt: toMoney(
@@ -303,43 +435,20 @@ export const listMembers = async (gymId: string): Promise<MemberListItem[]> => {
 };
 
 /**
- * How little is left before a membership counts as running out.
+ * Ending, not ended.
  *
- * Tuned for the monthly plan this gym sells, which is twenty sessions: five
- * sessions is roughly the last week of training at three or four visits a week,
- * and seven days is that same week measured the other way.
+ * Asked of each membership rather than of a member-wide summary. The old
+ * version read one summed visit count and one end date, so a member holding a
+ * gym plan with two sessions left *and* a year-long sauna package answered
+ * "no": the visits summed past the threshold and the end date belonged to the
+ * sauna. The member was days from losing the thing they actually came for and
+ * never appeared in the filter meant to catch exactly that.
+ *
+ * Already-expired memberships do not count. Including them would turn a list
+ * the desk works through into an archive that only ever grows.
  */
-export const EXPIRING_VISITS = 5;
-export const EXPIRING_DAYS = 7;
-
-const MS_PER_DAY = 86_400_000;
-
-/**
- * Ending, not ended. A membership with no sessions left, or whose date has
- * already passed, is finished — including it would turn a list the desk works
- * through into an archive that only ever grows.
- */
-const isExpiringSoon = (member: MemberListItem, now: Date): boolean => {
-  const visits = member.remainingVisits;
-
-  if (visits !== null && visits > 0 && visits <= EXPIRING_VISITS) {
-    return true;
-  }
-
-  if (!member.endsAt) {
-    return false;
-  }
-
-  const ends = new Date(member.endsAt);
-
-  if (Number.isNaN(ends.getTime())) {
-    return false;
-  }
-
-  const days = Math.ceil((ends.getTime() - now.getTime()) / MS_PER_DAY);
-
-  return days >= 0 && days <= EXPIRING_DAYS;
-};
+const isExpiringSoon = (member: MemberListItem): boolean =>
+  member.memberships.some((held) => held.state === "expiring");
 
 const owesMembership = (member: MemberListItem): boolean =>
   Number(member.membershipDebt) > 0;
@@ -349,8 +458,7 @@ const owesShop = (member: MemberListItem): boolean =>
 
 const matchesStatus = (
   member: MemberListItem,
-  filter: MemberQueryInput["filter"],
-  now: Date
+  filter: MemberQueryInput["filter"]
 ): boolean => {
   if (filter === "active") {
     return member.isActive;
@@ -361,7 +469,7 @@ const matchesStatus = (
   }
 
   if (filter === "expiring") {
-    return isExpiringSoon(member, now);
+    return isExpiringSoon(member);
   }
 
   return true;
@@ -435,7 +543,6 @@ export const pageMembers = async (
   query: MemberQueryInput
 ): Promise<MemberPage> => {
   const all = await listMembers(gymId);
-  const now = new Date();
   const needle = (query.query ?? "").trim().toLowerCase();
 
   const counts: MemberCounts = {
@@ -453,7 +560,7 @@ export const pageMembers = async (
       counts.status.inactive += 1;
     }
 
-    if (isExpiringSoon(member, now)) {
+    if (isExpiringSoon(member)) {
       counts.status.expiring += 1;
     }
 
@@ -473,7 +580,7 @@ export const pageMembers = async (
     }
 
     if (
-      matchesStatus(member, query.filter, now) &&
+      matchesStatus(member, query.filter) &&
       matchesDebt(member, query.debt) &&
       matchesQuery(member, needle)
     ) {
@@ -585,29 +692,30 @@ export const settleMembership = (
 const sellMembership = async (
   tx: Transaction,
   {
+    branchId,
     gymId,
-    input,
     memberId,
     now,
+    sale,
     workerId,
   }: {
+    branchId: string | null;
     gymId: string;
-    input: CreateMemberInput;
     memberId: string;
     now: Date;
+    /** The membership being sold, or null when the caller is not selling one. */
+    sale: MembershipSaleInput | null | undefined;
     workerId: string;
   }
 ): Promise<void> => {
-  if (!input.membership) {
+  if (!sale) {
     return;
   }
 
   const [plan] = await tx
     .select()
     .from(plans)
-    .where(
-      and(eq(plans.gymId, gymId), eq(plans.planId, input.membership.planId))
-    )
+    .where(and(eq(plans.gymId, gymId), eq(plans.planId, sale.planId)))
     .limit(1);
 
   if (!plan) {
@@ -615,12 +723,12 @@ const sellMembership = async (
   }
 
   const membershipId = nanoid(ID_LENGTH);
-  const startsAt = toStartOfDay(input.membership.startsAt);
+  const startsAt = toStartOfDay(sale.startsAt);
   const visits = plan.visitQty ?? 0;
 
   const { charged, rows } = settleMembership(
     Number(plan.price ?? 0),
-    input.membership.payments
+    sale.payments
   );
 
   await tx.insert(memberships).values({
@@ -659,7 +767,7 @@ const sellMembership = async (
   for (const row of rows) {
     await tx.insert(income).values({
       gymId,
-      branchId: input.branchId ?? null,
+      branchId,
       category: "membership",
       targetId: membershipId,
       memberId,
@@ -767,7 +875,14 @@ export const createMember = async (
         throw new UnauthorizedError("Missing x-worker-id");
       }
 
-      await sellMembership(tx, { gymId, input, memberId, now, workerId });
+      await sellMembership(tx, {
+        branchId: input.branchId ?? null,
+        gymId,
+        memberId,
+        now,
+        sale: input.membership,
+        workerId,
+      });
     }
   });
 
@@ -900,4 +1015,100 @@ export const setMemberActive = async (
     .update(members)
     .set({ status: isActive ? "active" : "inactive" })
     .where(and(eq(members.gymId, gymId), eq(members.memberId, memberId)));
+};
+
+/**
+ * Sells a further membership to someone who already exists.
+ *
+ * The same sale `createMember` performs, reached from the members table rather
+ * than from the new-member form — because holding more than one at a time is
+ * ordinary here. A member trains on a gym plan, buys a course of massages and a
+ * sauna package, and each is its own membership with its own clock.
+ *
+ * It is also how a renewal is recorded: selling the same plan again with a
+ * start date the day after the current one ends stacks a second row behind the
+ * first rather than editing it. That keeps `income.target_id` pointing at one
+ * membership per purchase, which is what the debt figure on this screen is
+ * computed from — extending a row in place would put two payments behind one id
+ * and quietly make `sold - paid` meaningless.
+ */
+export const addMembership = async (
+  gymId: string,
+  memberId: string,
+  sale: MembershipSaleInput,
+  workerId: string | null
+): Promise<void> => {
+  if (!workerId) {
+    // `income.created_by` is NOT NULL: every payment is attributable.
+    throw new UnauthorizedError("Missing x-worker-id");
+  }
+
+  const [member] = await db
+    .select({ branchId: members.homeBranch })
+    .from(members)
+    .where(and(eq(members.gymId, gymId), eq(members.memberId, memberId)))
+    .limit(1);
+
+  if (!member) {
+    throw new NotFoundError("Member not found");
+  }
+
+  await db.transaction(async (tx) => {
+    await sellMembership(tx, {
+      branchId: member.branchId ?? null,
+      gymId,
+      memberId,
+      now: new Date(),
+      sale,
+      workerId,
+    });
+  });
+};
+
+/** One time a member came in. */
+export interface MemberVisit {
+  at: string | null;
+  id: number;
+}
+
+/**
+ * How far back one member's visit list goes.
+ *
+ * A window rather than everything: this hangs off a badge in a table, and a
+ * member who has trained daily for two years has no use for the seven-hundredth
+ * row. Recent is the question being asked.
+ */
+const VISIT_HISTORY_LIMIT = 60;
+
+/**
+ * A member's visits, newest first.
+ *
+ * Attributed to the member and not to a membership, because that is how the
+ * database records them: `attendance_sessions` carries the person, not the plan
+ * they came in on. A visit does decrement a specific membership's counter (see
+ * `countVisit`), but which one is decided at the door and never written down —
+ * so "this membership's visits" is not a question the data can answer, and
+ * showing the member's own history is the honest version of it.
+ */
+export const listMemberVisits = async (
+  gymId: string,
+  memberId: string
+): Promise<MemberVisit[]> => {
+  const rows = await db
+    .select({
+      at: attendanceSessions.checkIn,
+      id: attendanceSessions.sessionId,
+    })
+    .from(attendanceSessions)
+    .where(
+      and(
+        eq(attendanceSessions.gymId, gymId),
+        eq(attendanceSessions.personType, "member"),
+        eq(attendanceSessions.personId, memberId)
+      )
+    )
+    .orderBy(desc(attendanceSessions.checkIn))
+    .limit(VISIT_HISTORY_LIMIT);
+
+  return rows.map((row) => ({ at: toIsoDate(row.at), id: row.id }));
 };

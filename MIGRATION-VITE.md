@@ -9,7 +9,7 @@ Written 2026-07-28.
 | 2 — scaffold `apps/web` | **done** (`c634ebc`) — shell only, no data |
 | 3 — SPA auth | **done** — sign-in, guards, refresh cookie, TanStack Router |
 | 4 — 9 feature verticals | **done** — all nine |
-| 5 — cutover, delete `apps/app` | not started |
+| 5 — cutover, delete `apps/app` | **partly done** — `apps/app` deleted 2026-07-29; `requireService` still stands |
 
 ## The headline
 
@@ -320,13 +320,25 @@ by size:
 ### Phase 5 — Cutover and delete
 
 1. Point the front-desk terminal at the Vite build.
-2. Remove the `requireService` fallback; delete the middleware and
-   `SERVICE_TOKEN` from both `.env.local` files.
-3. Delete `apps/app`, the next-auth surface of `@repo/auth`, `@repo/next-config`,
-   `@repo/seo`.
-
-Only after the SPA has run in production for a bit. Deleting `apps/app` is
-irreversible without git — another reason Phase 0 is Phase 0.
+2. **Done (2026-07-29).** `apps/app` deleted. Every page had been ported except
+   `/search`, which was next-forge's "Building Your Application" placeholder and
+   was not worth porting. `@repo/auth` was added to `apps/web`'s dependencies at
+   the same time — the SPA imports `components/phone-field`, `lib/countries` and
+   `lib/phone` from it, and had been resolving them only because `apps/app`
+   pulled the package into the tree.
+3. **Still open — `requireService`.** It takes a shared `SERVICE_TOKEN` plus a
+   **client-supplied `x-gym-id`**, which is only safe with a trusted server
+   deciding the gym. That server is gone, so this is now an open door with
+   nobody behind it: anyone holding the token can reach any tenant. Drop it from
+   `middleware/caller.ts`, delete `middleware/service.ts` and `SERVICE_TOKEN`
+   from `env.ts` and `.env.local`, and update `caller-auth.test.ts`.
+4. **Still open — dead packages.** The next-auth half of `@repo/auth`
+   (`config.ts`, `types.ts`, `provider.tsx`, `server.ts`, `client.ts`,
+   `components/sign-in.tsx`, `lib/verify-credentials.ts`), plus
+   `@repo/next-config` and `@repo/seo`, which had no consumer but `apps/app`.
+   `@repo/storage` and `@repo/internationalization` were already unreferenced
+   before any of this. Keep `components/phone-field`, `components/flag-icon`,
+   `lib/countries` and `lib/phone` — `apps/web` uses all four.
 
 ## Risks
 

@@ -62,16 +62,20 @@ export const authenticateService = (header: HeaderReader): ServiceCaller => {
 };
 
 /**
- * Trusts apps/app to call on behalf of an already-authenticated user.
+ * Trusted apps/app to call on behalf of an already-authenticated user.
  *
- * The web session is a next-auth cookie this API cannot verify — different
- * library, different secret — so the Next server acts as the front door: it
- * authenticates the user, then forwards the request with a shared token and the
- * caller's `gym_id`.
+ * **Obsolete: apps/app was deleted on 2026-07-29 and no caller remains.** This
+ * whole file should go — see `middleware/caller.ts` for what that takes.
  *
- * The trade-off is explicit: anything holding SERVICE_TOKEN can name any gym.
- * That is acceptable while both processes are first-party and the API is not
- * publicly routable.
+ * It worked because the web session was a next-auth cookie this API could not
+ * verify — different library, different secret — so the Next server acted as
+ * the front door: it authenticated the user, then forwarded the request with a
+ * shared token and the caller's `gym_id`.
+ *
+ * The trade-off was explicit: anything holding SERVICE_TOKEN can name any gym.
+ * That was acceptable while the only holder was a first-party server on a
+ * non-public API. With that server gone the trade-off buys nothing and the
+ * exposure stands.
  *
  * **Being retired.** Routes now mount `requireCaller`, which prefers a per-user
  * bearer token and only falls back to this. Once apps/app is gone (Phase 5 of

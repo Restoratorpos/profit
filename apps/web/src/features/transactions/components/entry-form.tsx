@@ -29,7 +29,9 @@ import {
   XIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { toBareAmount } from "@/lib/money";
 import { searchMembers } from "../api";
 import {
   ACTIVE_FILL_DANGER,
@@ -39,9 +41,7 @@ import {
   categoryNeedsMember,
   categoryNeedsSupplier,
   categoryNeedsWorker,
-  digitsOnly,
   EXPENSE_CATEGORIES,
-  formatAmountInput,
   INCOME_CATEGORIES,
   labelForCategory,
   type PartyOption,
@@ -353,8 +353,8 @@ export const EntryForm = ({
   ];
 
   const canSave =
-    digitsOnly(form.amount).length > 0 &&
-    Number(digitsOnly(form.amount)) > 0 &&
+    toBareAmount(form.amount).length > 0 &&
+    Number(toBareAmount(form.amount)) > 0 &&
     !isSalaryMissingWorker &&
     !(isTransfer && form.cashbox === form.target) &&
     !isPending;
@@ -403,18 +403,15 @@ export const EntryForm = ({
               larger than everything around it. Digits in state, grouped only for
               reading — the submitted value is never the formatted string. */}
           <div className="relative">
-            <Input
+            <MoneyInput
               autoComplete="off"
               className="h-14 pr-16 font-semibold text-2xl tabular-nums"
               disabled={isPending}
               id="tx-amount"
-              inputMode="numeric"
-              onChange={(event) =>
-                onPatch({ amount: digitsOnly(event.target.value) })
-              }
+              onChange={(amount) => onPatch({ amount })}
               placeholder="0"
               ref={amountRef}
-              value={formatAmountInput(form.amount)}
+              value={form.amount}
             />
             <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-muted-foreground text-sm">
               {messages["tx.currency"]}

@@ -14,7 +14,7 @@ import { MembersView } from "./members-view";
  * in this sheet cannot disagree with the plans screen.
  */
 export const MembersPage = () => {
-  const { messages } = useLocale();
+  const { locale, messages } = useLocale();
   const first = useMembersPage(DEFAULT_MEMBER_QUERY);
   const plans = useQuery(plansQuery);
 
@@ -54,6 +54,11 @@ export const MembersPage = () => {
   }
 
   return (
-    <MembersView initial={first.data} messages={messages} plans={planOptions} />
+    <MembersView
+      initial={first.data}
+      locale={locale}
+      messages={messages}
+      plans={planOptions}
+    />
   );
 };

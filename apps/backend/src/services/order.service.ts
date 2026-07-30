@@ -82,7 +82,13 @@ export interface MemberOrderView {
 }
 
 export interface MemberOrderDetail {
-  member: { id: string; name: string; phone: string | null };
+  member: {
+    /** The card number, or null for a member of staff — see `Debtor`. */
+    code: string | null;
+    id: string;
+    name: string;
+    phone: string | null;
+  };
   orders: MemberOrderView[];
   /** Aggregates across every order below, so the drawer footer needs no math. */
   paid: string;
@@ -127,6 +133,11 @@ const debtorOrderScope = (gymId: string, type?: DebtorType) =>
 
 /** A buyer who can owe: their name and phone, and which table they came from. */
 interface Debtor {
+  /**
+   * The short human-facing card number, which only members carry — staff have no
+   * `unique_id` column, so a worker's balance shows a name and nothing else.
+   */
+  code: string | null;
   id: string;
   name: string;
   phone: string | null;
@@ -145,6 +156,8 @@ const loadDebtor = async (gymId: string, userId: string): Promise<Debtor> => {
       id: members.memberId,
       name: members.fullname,
       phone: members.phone,
+      // Same row, no extra query — the drawer identifies the buyer by it.
+      code: members.uniqueId,
     })
     .from(members)
     .where(and(eq(members.gymId, gymId), eq(members.memberId, userId)))
@@ -152,6 +165,7 @@ const loadDebtor = async (gymId: string, userId: string): Promise<Debtor> => {
 
   if (member) {
     return {
+      code: member.code,
       id: member.id ?? userId,
       name: member.name ?? "",
       phone: member.phone,
@@ -171,6 +185,7 @@ const loadDebtor = async (gymId: string, userId: string): Promise<Debtor> => {
 
   if (worker) {
     return {
+      code: null,
       id: worker.id,
       name: worker.name ?? "",
       phone: worker.phone,
@@ -355,7 +370,12 @@ export const getMemberOrderDetail = async (
   userId: string
 ): Promise<MemberOrderDetail> => {
   const debtor = await loadDebtor(gymId, userId);
-  const buyer = { id: debtor.id, name: debtor.name, phone: debtor.phone };
+  const buyer = {
+    code: debtor.code,
+    id: debtor.id,
+    name: debtor.name,
+    phone: debtor.phone,
+  };
 
   // Only orders that still owe something. A fully-paid order is closed history —
   // the desk wants to see what is left to collect, not a lifetime receipt, so a

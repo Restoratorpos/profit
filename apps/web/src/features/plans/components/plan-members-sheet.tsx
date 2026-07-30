@@ -57,18 +57,22 @@ const MemberRow = ({
       ) : null}
     </div>
 
-    {/* A phone number is the one thing the desk actually needs to act on, so
-        it is a tel: link rather than plain text — one tap to call. */}
-    {member.phone ? (
-      <a
-        className="w-fit text-primary-accent underline-offset-4 hover:underline"
-        href={`tel:${member.phone}`}
-      >
-        {formatPhone(member.phone)}
-      </a>
-    ) : null}
-
     <dl className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+      {/* Labelled like the two facts under it. A bare string of digits under a
+          name is read as an ID as readily as a phone number — this row already
+          carries both kinds of number elsewhere in the app.
+
+          Plain text, not a `tel:` link: this is read on a desk PC with no dialer
+          behind it, so the link went nowhere and made the number look clickable.
+          `members.colPhone` rather than a fourth copy of the word "Telefon". */}
+      {member.phone ? (
+        <div className="flex gap-2">
+          <dt>{messages["members.colPhone"]}:</dt>
+          <dd className="text-foreground tabular-nums">
+            {formatPhone(member.phone)}
+          </dd>
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <dt>{messages["plans.memberEnds"]}:</dt>
         <dd className="text-foreground">{formatDate(member.endsAt)}</dd>

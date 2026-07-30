@@ -1,12 +1,10 @@
 import { formatPhone } from "@repo/auth/lib/countries";
-import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
   Field,
   FieldError,
   FieldLabel,
 } from "@repo/design-system/components/ui/field";
-import { Input } from "@repo/design-system/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -16,7 +14,7 @@ import {
   SheetTitle,
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -25,6 +23,8 @@ import {
   ShoppingCartIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { IdCode } from "@/components/id-code";
+import { MoneyInput } from "@/components/money-input";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -51,35 +51,6 @@ const PAYMENT_OPTIONS: readonly {
 /** A whole-number amount string, the value the amount box holds. */
 const toAmount = (value: string): string =>
   String(Math.round(Number(value) || 0));
-
-const StatusBadge = ({
-  detail,
-  messages,
-}: {
-  detail: MemberOrderDetail;
-  messages: Messages;
-}) => {
-  const remaining = Number(detail.remaining);
-  const paid = Number(detail.paid);
-
-  if (remaining <= 0) {
-    return (
-      <Badge className="border-transparent bg-primary/15 text-primary-accent">
-        {messages["orders.statusPaid"]}
-      </Badge>
-    );
-  }
-
-  if (paid > 0) {
-    return (
-      <Badge className="border-transparent bg-amber-500/15 text-amber-600 dark:text-amber-400">
-        {messages["orders.statusPartial"]}
-      </Badge>
-    );
-  }
-
-  return <Badge variant="destructive">{messages["orders.statusUnpaid"]}</Badge>;
-};
 
 /** One product line: a bold ×N badge so the count reads at a glance. */
 const ItemRow = ({ item }: { item: MemberOrderView["items"][number] }) => (
@@ -233,7 +204,7 @@ const PaymentPanel = ({
         return (
           <Button
             aria-checked={active}
-            className={cn("h-16 flex-col gap-1", active && SELECTED_FILL)}
+            className={cn("h-16 flex-col gap-1", active && SELECTED_TINT)}
             disabled={disabled}
             key={option.value}
             onClick={() => onPaymentType(option.value)}
@@ -252,12 +223,11 @@ const PaymentPanel = ({
       <FieldLabel htmlFor="order-amount">
         {messages["orders.amountLabel"]}
       </FieldLabel>
-      <Input
+      <MoneyInput
         aria-invalid={Boolean(error)}
         disabled={disabled}
         id="order-amount"
-        inputMode="decimal"
-        onChange={(event) => onAmount(event.target.value)}
+        onChange={onAmount}
         placeholder="0"
         value={amount}
       />
@@ -318,12 +288,15 @@ const DetailBody = ({
 
   return (
     <>
+      {/* Read-only on purpose: changing what was sold belongs to the edit sheet,
+          so a mis-tap here can never rewrite a recorded sale. */}
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-        {/* Read-only on purpose: changing what was sold belongs to the edit
-            sheet, so a mis-tap here can never rewrite a recorded sale. */}
-        <h3 className="font-semibold text-lg">
-          {messages["orders.itemsHeading"]}
-        </h3>
+        {/* Names the list rather than the panel, which is why it sits here and not
+            in the header. `nav.orders` rather than a fourth copy of the same
+            string — the sidebar item and this label are the same word. */}
+        <p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          {messages["nav.orders"]}:
+        </p>
 
         {detail.orders.length === 0 ? (
           <p className="text-muted-foreground text-sm">
@@ -518,29 +491,50 @@ export const OrderDetailSheet = ({
 
   return (
     <Sheet onOpenChange={onOpenChange} open={summary !== null}>
+      {/* No close button in the corner: the footer's Bekor qilish is the way out
+          of this drawer, and Esc and the overlay still close it. The corner is
+          the code's now. */}
       <SheetContent
         className="flex w-full flex-col gap-0 p-0 sm:max-w-lg"
+        showCloseButton={false}
         side="right"
       >
-        <SheetHeader className="border-b">
-          <SheetTitle className="flex items-center gap-2">
-            <ShoppingCartIcon className="size-5 text-primary-accent" />
-            {messages["orders.detailTitle"]}
-          </SheetTitle>
-          <SheetDescription>{summary?.name}</SheetDescription>
-          {detail ? (
-            <div className="flex items-center justify-between gap-2">
-              <StatusBadge detail={detail} messages={messages} />
-              {detail.member.phone ? (
-                <a
-                  className="text-primary-accent text-sm underline-offset-4 hover:underline"
-                  href={`tel:${detail.member.phone}`}
-                >
-                  {formatPhone(detail.member.phone)}
-                </a>
-              ) : null}
-            </div>
-          ) : null}
+        {/*
+         * The buyer is the header. "Buyurtma tafsilotlari" described the panel
+         * to someone who had just clicked a debt figure to open it, and spent
+         * the top row saying what they already knew; the name now has it. The
+         * status badge went for the same reason — "to'lanmagan" is what the
+         * qoldiq figure below already says, with the amount attached.
+         */}
+        <SheetHeader className="gap-2 border-b">
+          {/* The mark on the left and the code on the right are positioned out of
+              the flow, so the name is centred on the panel rather than on
+              whatever space those two leave it. */}
+          <div className="relative flex flex-col items-center gap-1 text-center">
+            <span
+              aria-hidden="true"
+              className="absolute top-0 left-0 flex size-9 items-center justify-center rounded-full bg-primary/10 text-primary-accent"
+            >
+              <ShoppingCartIcon className="size-5" />
+            </span>
+
+            {detail?.member.code ? (
+              <span className="absolute top-0 right-0">
+                <IdCode code={detail.member.code} />
+              </span>
+            ) : null}
+
+            <SheetTitle className="max-w-[60%] truncate">
+              {summary?.name}
+            </SheetTitle>
+
+            {/* Under the name, and text rather than a `tel:` link — the desk
+                terminal is a PC. Muted, not accented: the accent colour is what
+                every real link in this app is painted with. */}
+            <SheetDescription className="tabular-nums">
+              {detail?.member.phone ? formatPhone(detail.member.phone) : null}
+            </SheetDescription>
+          </div>
         </SheetHeader>
 
         {renderContent()}

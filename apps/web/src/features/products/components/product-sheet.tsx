@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { CreatableCombobox } from "@/components/creatable-combobox";
+import { MoneyInput } from "@/components/money-input";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useCreateCategory, useSaveProduct } from "../api";
 import {
@@ -160,18 +161,19 @@ const TypePicker = ({
 const RequiredField = ({
   error,
   id,
-  inputMode,
   isPending,
   label,
+  money,
   name,
   onChange,
   value,
 }: {
   error?: string;
   id: string;
-  inputMode?: "decimal";
   isPending: boolean;
   label: string;
+  /** An amount, so it groups its digits as they are typed. */
+  money?: boolean;
   /** Kept for autofill and for anything that reads the form by field name. */
   name: string;
   onChange: (value: string) => void;
@@ -179,15 +181,25 @@ const RequiredField = ({
 }) => (
   <Field data-invalid={Boolean(error) || undefined}>
     <FieldLabel htmlFor={id}>{label} *</FieldLabel>
-    <Input
-      aria-invalid={Boolean(error)}
-      disabled={isPending}
-      id={id}
-      inputMode={inputMode}
-      name={name}
-      onChange={(event) => onChange(event.target.value)}
-      value={value}
-    />
+    {money ? (
+      <MoneyInput
+        aria-invalid={Boolean(error)}
+        disabled={isPending}
+        id={id}
+        name={name}
+        onChange={onChange}
+        value={value}
+      />
+    ) : (
+      <Input
+        aria-invalid={Boolean(error)}
+        disabled={isPending}
+        id={id}
+        name={name}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+    )}
     {error ? <FieldError>{error}</FieldError> : null}
   </Field>
 );
@@ -353,9 +365,9 @@ export const ProductSheet = ({
                 <RequiredField
                   error={fieldErrors.price}
                   id="product-price"
-                  inputMode="decimal"
                   isPending={isPending}
                   label={messages["products.fieldPrice"]}
+                  money
                   name="price"
                   onChange={setPrice}
                   value={price}
@@ -365,13 +377,13 @@ export const ProductSheet = ({
               <RequiredField
                 error={fieldErrors.cost}
                 id="product-cost"
-                inputMode="decimal"
                 isPending={isPending}
                 label={
                   isRawMaterial
                     ? messages["products.fieldCostPerUnit"]
                     : messages["products.fieldCost"]
                 }
+                money
                 name="cost"
                 onChange={setCost}
                 value={cost}

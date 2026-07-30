@@ -5,6 +5,7 @@ import {
   buttonVariants,
 } from "@repo/design-system/components/ui/button";
 import { cn } from "@repo/design-system/lib/utils";
+import { format } from "date-fns";
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -25,6 +26,9 @@ function Calendar({
   buttonVariant = "ghost",
   formatters,
   components,
+  // Pulled out of the spread rather than left to flow into DayPicker, because the
+  // month-dropdown formatter below has to be built from it.
+  locale,
   ...props
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>["variant"];
@@ -171,10 +175,22 @@ function Calendar({
         ...components,
       }}
       formatters={{
-        formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+        /*
+         * Formatted through the calendar's own date library, which carries the
+         * `locale` prop — not `date.toLocaleString("default")`, which is the
+         * *browser's* language. That is how a Uzbek interface on a
+         * Russian-configured Windows got a Russian month dropdown above Uzbek
+         * weekday headings.
+         *
+         * `LLL` is the standalone abbreviated month rather than `MMM`, the
+         * genitive-case one used inside a full date: Russian wants "август" in a
+         * list of months and "августа" in "26 августа", and a dropdown is a list.
+         */
+        formatMonthDropdown: (date, dateLib) =>
+          dateLib ? dateLib.format(date, "LLL") : format(date, "LLL"),
         ...formatters,
       }}
+      locale={locale}
       showOutsideDays={showOutsideDays}
       {...props}
     />

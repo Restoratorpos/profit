@@ -5,7 +5,6 @@ import {
   LayoutDashboardIcon,
   type LucideIcon,
   PackageIcon,
-  ScanFaceIcon,
   ShoppingBagIcon,
   ShoppingCartIcon,
   TagIcon,
@@ -37,6 +36,13 @@ export interface NavItem {
  * a nav entry pointing at a route that does not exist is a compile error rather
  * than a dead link found by clicking. `NavItem` still documents the shape and is
  * enforced structurally by `satisfies`.
+ */
+/*
+ * `/devices` is deliberately absent. Terminals are set up once and then left
+ * alone, so they live in the profile menu rather than taking a permanent slot
+ * in a nav the desk reads all day. `isNavItemActive` is driven by this list, so
+ * nothing in the sidebar lights up while you are on that page — which is
+ * correct: it is not a sidebar destination any more.
  */
 export const NAV_ITEMS = [
   {
@@ -73,12 +79,6 @@ export const NAV_ITEMS = [
     href: "/workers",
     labelKey: "nav.staff",
     icon: UserCogIcon,
-    group: "advanced",
-  },
-  {
-    href: "/devices",
-    labelKey: "nav.devices",
-    icon: ScanFaceIcon,
     group: "advanced",
   },
   {

@@ -15,6 +15,8 @@ paths: "apps/backend/src/types/**"
 
 ## Note on next-auth types
 
-`packages/auth/types.ts` augments next-auth's `User` and `Session` with `phone`. It is a **`.ts` module side-effect imported by `config.ts`**, not a loose `.d.ts` — a `.d.ts` nobody imports is only picked up when that package compiles itself, so consumers like `apps/app` never saw the augmentation and every `session.user.phone` failed to typecheck.
-
-Do not add a `declare module "next-auth/jwt"` block: that subpath re-exports `@auth/core/jwt`, a transitive dependency pnpm does not hoist, so TypeScript cannot resolve it and rejects the augmentation (TS2664). `JWT` already has an index signature — narrow on read instead.
+**Dead as of 2026-07-29.** `packages/auth/types.ts` and `config.ts` augment
+next-auth types for a consumer that no longer exists — `apps/app` was the only
+one, and `apps/web` imports just `components/phone-field`, `lib/countries` and
+`lib/phone`. Nothing here is load-bearing; it is waiting to be deleted along
+with the rest of the next-auth half of the package.

@@ -1,5 +1,4 @@
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -24,12 +23,14 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { TimePicker } from "@repo/design-system/components/ui/time-picker";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { UserPlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { FaceDialog } from "@/components/face-dialog";
 import { FaceField } from "@/components/face-field";
+import { MoneyInput } from "@/components/money-input";
 import { removeFace, setFace } from "@/lib/face/api";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useCreateWorker, useUpdateWorker, type WorkerInput } from "../api";
@@ -352,7 +353,7 @@ export const WorkerSheet = ({
                   return (
                     <Button
                       aria-checked={active}
-                      className={cn(active && SELECTED_FILL)}
+                      className={cn(active && SELECTED_TINT)}
                       disabled={isPending}
                       key={type}
                       onClick={() => setSalaryType(type)}
@@ -372,7 +373,7 @@ export const WorkerSheet = ({
             <div className="grid gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="worker-salary">{salaryLabel}</FieldLabel>
-                <Input
+                <MoneyInput
                   defaultValue={
                     worker
                       ? String(Math.round(Number(worker.salaryAmount)))
@@ -380,7 +381,6 @@ export const WorkerSheet = ({
                   }
                   disabled={isPending}
                   id="worker-salary"
-                  inputMode="decimal"
                   name="salaryAmount"
                   placeholder="0"
                 />
@@ -390,7 +390,7 @@ export const WorkerSheet = ({
                 <FieldLabel htmlFor="worker-hired">
                   {messages["workers.hireDate"]}
                 </FieldLabel>
-                <DatePicker
+                <DateField
                   defaultValue={worker?.hiredAt?.slice(0, 10) ?? ""}
                   disabled={isPending}
                   id="worker-hired"
@@ -435,7 +435,7 @@ export const WorkerSheet = ({
                     <Button
                       aria-checked={active}
                       aria-label={messages[labelKey]}
-                      className={cn("min-w-14", active && SELECTED_FILL)}
+                      className={cn("min-w-14", active && SELECTED_TINT)}
                       disabled={isPending}
                       key={day}
                       onClick={() => toggleDay(day)}

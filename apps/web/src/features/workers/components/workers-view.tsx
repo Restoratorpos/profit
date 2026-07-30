@@ -1,7 +1,6 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,8 +31,10 @@ import {
 } from "@repo/design-system/components/ui/table";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  CalendarDaysIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  HistoryIcon,
   LogInIcon,
   LogOutIcon,
   MoreVerticalIcon,
@@ -44,17 +45,19 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { DateField } from "@/components/date-field";
 import { PAGE_SIZES } from "@/components/use-pagination";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
-import { useSetWorkerActive, useWorkersPage } from "../api";
+import { usePayday, useSetWorkerActive, useWorkersPage } from "../api";
 import {
   DEFAULT_WORKER_QUERY,
   formatHours,
   monthOfDate,
   positionLabelKey,
+  RANGE_LABEL,
   RANGE_PRESETS,
   type RangePreset,
   type WorkerFilter,
@@ -64,6 +67,8 @@ import {
 } from "../types";
 import { CheckInDialog } from "./check-in-dialog";
 import { PayWorkerDialog } from "./pay-worker-dialog";
+import { PaydayDialog } from "./payday-dialog";
+import { SalaryHistorySheet } from "./salary-history-sheet";
 import { WorkerDetailSheet } from "./worker-detail-sheet";
 import { WorkerSheet } from "./worker-sheet";
 
@@ -76,13 +81,6 @@ const STATUS_FILTERS: readonly {
   { key: "inactive", labelKey: "workers.filterInactive" },
   { key: "all", labelKey: "workers.filterAll" },
 ];
-
-const RANGE_LABEL: Record<RangePreset, keyof Messages> = {
-  "this-month": "workers.rangeThisMonth",
-  "last-month": "workers.rangeLastMonth",
-  "last-30": "workers.rangeLast30",
-  custom: "workers.rangeCustom",
-};
 
 /**
  * A money figure, or a dash when there is nothing to state — which covers both
@@ -140,6 +138,10 @@ export const WorkersView = ({
     worker: WorkerListItem;
   } | null>(null);
   const [paying, setPaying] = useState<WorkerListItem | null>(null);
+  const [isHistoryOpen, setHistoryOpen] = useState(false);
+  const [isPaydayOpen, setPaydayOpen] = useState(false);
+
+  const payday = usePayday();
 
   const setWorkerActive = useSetWorkerActive();
 
@@ -210,52 +212,10 @@ export const WorkersView = ({
             to exist for a screen reader. */}
         <h1 className="sr-only">{messages["workers.title"]}</h1>
 
-        <p className="whitespace-nowrap">
-          <span className="font-semibold text-lg tabular-nums">
-            {counts.active}
-          </span>{" "}
-          <span className="text-muted-foreground text-sm">
-            {messages["workers.count"]}
-          </span>
-        </p>
-
-        <div className="w-96 max-w-full">
-          <InputGroup>
-            <InputGroupAddon align="inline-start">
-              <SearchIcon className="size-5" />
-            </InputGroupAddon>
-            <InputGroupInput
-              onChange={(event) => narrow({ query: event.target.value })}
-              placeholder={messages["workers.search"]}
-              value={request.query}
-            />
-          </InputGroup>
-        </div>
-
-        <Select
-          onValueChange={(value) => narrow({ status: value as WorkerFilter })}
-          value={request.status}
-        >
-          <SelectTrigger
-            aria-label={messages["workers.title"]}
-            className="w-44"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {STATUS_FILTERS.map((option) => (
-                <SelectItem key={option.key} value={option.key}>
-                  {`${messages[option.labelKey]} (${counts[option.key]})`}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-
-        {/* The range drives the hours column, and changing it is a navigation —
-            hence disabled while the new range is on its way, so a second pick
-            cannot race the first. */}
+        {/* The range leads the row. It drives the hours, earnings and payment
+            columns, so it decides what every figure in the table means — and
+            changing it is a navigation, hence disabled while the new range is
+            on its way so a second pick cannot race the first. */}
         <Select
           disabled={isNavigating}
           onValueChange={(value) =>
@@ -280,7 +240,64 @@ export const WorkersView = ({
           </SelectContent>
         </Select>
 
+        <div className="w-96 max-w-full">
+          <InputGroup>
+            <InputGroupAddon align="inline-start">
+              <SearchIcon className="size-5" />
+            </InputGroupAddon>
+            <InputGroupInput
+              onChange={(event) => narrow({ query: event.target.value })}
+              placeholder={messages["workers.search"]}
+              value={request.query}
+            />
+          </InputGroup>
+        </div>
+
+        {/* Which slice of the staff is showing. */}
+        <Select
+          onValueChange={(value) => narrow({ status: value as WorkerFilter })}
+          value={request.status}
+        >
+          <SelectTrigger
+            aria-label={messages["workers.title"]}
+            className="w-44"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {STATUS_FILTERS.map((option) => (
+                <SelectItem key={option.key} value={option.key}>
+                  {messages[option.labelKey]}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+
         <div className="ml-auto flex items-center gap-3">
+          {/* Carries its current value, because the setting is the answer —
+              opening a dialog to find out which day it is would be a round
+              trip for something that fits in the button. */}
+          <Button onClick={() => setPaydayOpen(true)} variant="outline">
+            <CalendarDaysIcon className="size-5" />
+            {messages["workers.payday"]}
+            <span className="font-semibold tabular-nums">
+              {payday.data?.payday ?? "—"}
+            </span>
+          </Button>
+
+          {/* Whole-gym payroll, so it sits beside the list rather than on a
+              row: it is not about any one worker. */}
+          <Button
+            aria-label={messages["workers.history"]}
+            onClick={() => setHistoryOpen(true)}
+            size="icon"
+            title={messages["workers.history"]}
+            variant="outline"
+          >
+            <HistoryIcon className="size-5" />
+          </Button>
           <Button
             aria-label={messages["workers.add"]}
             onClick={openCreate}
@@ -296,14 +313,14 @@ export const WorkersView = ({
           row that asked for them rather than holding space all the time. */}
       {preset === "custom" ? (
         <div className="flex flex-wrap items-center gap-2">
-          <DatePicker
+          <DateField
             aria-label={messages["workers.rangeLabel"]}
             className="w-full sm:w-44"
             onChange={(next) => pushRange("custom", { from: next, to })}
             value={from}
           />
           <span className="hidden text-muted-foreground sm:inline">—</span>
-          <DatePicker
+          <DateField
             aria-label={messages["workers.rangeLabel"]}
             className="w-full sm:w-44"
             onChange={(next) => pushRange("custom", { from, to: next })}
@@ -410,13 +427,14 @@ export const WorkersView = ({
                           </Button>
                         ) : (
                           <Button
+                            aria-label={messages["workers.checkIn"]}
                             disabled={!worker.isActive}
                             onClick={() => setCheck({ worker, mode: "in" })}
-                            size="sm"
+                            size="icon-sm"
+                            title={messages["workers.checkIn"]}
                             variant="outline"
                           >
                             <LogInIcon className="size-4" />
-                            {messages["workers.checkIn"]}
                           </Button>
                         )}
 
@@ -561,7 +579,13 @@ export const WorkersView = ({
           next person rather than carrying the last one's over. */}
       {paying ? (
         <PayWorkerDialog
-          defaultPeriod={monthOfDate(from)}
+          /* The month the range *ends* in, not the one it starts in. Under
+             "Butun davr" the start is 1 January and settling a wage against
+             January by default would be wrong every month but one; the end is
+             today, which is the month a payment handed over now belongs to.
+             It also quietly fixes "Oxirgi 30 kun", which used to default to
+             last month whenever the window crossed a month boundary. */
+          defaultPeriod={monthOfDate(to)}
           key={paying.id}
           locale={locale}
           messages={messages}
@@ -590,6 +614,22 @@ export const WorkersView = ({
           worker={check.worker}
         />
       ) : null}
+
+      {/* Kept mounted rather than conditional: its own filters are worth
+          keeping across a close and reopen, and the query is gated on `open`
+          so a closed drawer costs nothing. */}
+      <SalaryHistorySheet
+        locale={locale}
+        messages={messages}
+        onOpenChange={setHistoryOpen}
+        open={isHistoryOpen}
+      />
+
+      <PaydayDialog
+        messages={messages}
+        onOpenChange={setPaydayOpen}
+        open={isPaydayOpen}
+      />
     </div>
   );
 };

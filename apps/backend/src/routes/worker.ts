@@ -5,8 +5,10 @@ import { setFaceSchema } from "../schemas/device.js";
 import {
   attendanceMarkSchema,
   createWorkerSchema,
+  paydaySchema,
   payrollQuerySchema,
   payWorkerSchema,
+  salaryHistoryQuerySchema,
   setWorkerActiveSchema,
   updateWorkerSchema,
   workerQuerySchema,
@@ -23,12 +25,15 @@ import {
   checkIn,
   checkOut,
   createWorker,
+  getPayday,
   getWorkerDetail,
   getWorkerPayroll,
+  listSalaryPayments,
   listWorkers,
   pageWorkers,
   payWorker,
   rangeFromQuery,
+  setPayday,
   setWorkerActive,
   updateWorker,
 } from "../services/worker.service.js";
@@ -62,6 +67,41 @@ export const workerRoutes = new Hono<AppEnv>()
         query
       )
     );
+  })
+  /*
+   * Every wage the gym has handed over, across all staff.
+   *
+   * Registered above `/:workerId` because it would otherwise be read as a
+   * worker whose id is "payments" — Hono matches in registration order, which
+   * is the same reason `/page` sits where it does.
+   */
+  .get(
+    "/payments",
+    zValidator("query", salaryHistoryQuerySchema),
+    async (c) => {
+      const query = c.req.valid("query");
+
+      return c.json(
+        await listSalaryPayments(
+          c.get("gymId"),
+          rangeFromQuery(query.from, query.to),
+          query
+        )
+      );
+    }
+  )
+  /*
+   * The day of the month monthly salaries are settled on. A gym-wide policy, so
+   * it reads and writes one field on `gyms` — and, like `/payments`, it has to
+   * be registered above `/:workerId` to not be read as a worker id.
+   */
+  .get("/payday", async (c) =>
+    c.json({ payday: await getPayday(c.get("gymId")) })
+  )
+  .put("/payday", zValidator("json", paydaySchema), async (c) => {
+    await setPayday(c.get("gymId"), c.req.valid("json").payday);
+
+    return c.body(null, 204);
   })
   .post("/", zValidator("json", createWorkerSchema), async (c) => {
     const worker = await createWorker(c.get("gymId"), c.req.valid("json"));

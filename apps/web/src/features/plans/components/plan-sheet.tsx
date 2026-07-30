@@ -24,11 +24,12 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { Textarea } from "@repo/design-system/components/ui/textarea";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { TagIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { CreatableCombobox } from "@/components/creatable-combobox";
+import { MoneyInput } from "@/components/money-input";
 import type { MessageKey, Messages } from "@/lib/i18n/dictionary";
 import { useCreateHall, useSavePlan } from "../api";
 import {
@@ -201,7 +202,7 @@ const BillingToggle = ({
             className={cn(
               "h-8 font-medium",
               active
-                ? SELECTED_FILL
+                ? SELECTED_TINT
                 : "text-muted-foreground hover:bg-background/60"
             )}
             disabled={disabled}
@@ -242,12 +243,11 @@ const PricingFields = ({
           ? messages["plans.fieldAmountRecurring"]
           : messages["plans.fieldAmountOneTime"]}
       </FieldLabel>
-      <Input
+      <MoneyInput
         aria-invalid={Boolean(errors.price)}
         defaultValue={price ?? ""}
         disabled={disabled}
         id="plan-price"
-        inputMode="decimal"
         name="price"
         placeholder="0"
       />

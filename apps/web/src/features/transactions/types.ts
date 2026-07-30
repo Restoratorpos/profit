@@ -176,21 +176,15 @@ export type TxTab = (typeof TX_TABS)[number];
 
 export const DEFAULT_TX_TAB: TxTab = "expense";
 
-/**
- * Amounts are typed as bare digits and grouped only for reading, the same rule
- * the phone field follows: what is submitted is never the formatted string.
+/*
+ * Typing an amount lives in `@/lib/money` now — `MoneyInput` groups the digits
+ * and hands bare ones back, and every amount box in the product shares it. The
+ * pair that used to live here grouped with `ru-RU` spaces while `formatMoney`
+ * rendered `en-US` commas, so the ledger's own total disagreed with the box it
+ * was typed into.
  */
-export const digitsOnly = (value: string): string => value.replace(/\D/g, "");
 
 const GROUP_FORMAT = new Intl.NumberFormat("ru-RU");
-
-export const formatAmountInput = (digits: string): string => {
-  if (digits.length === 0) {
-    return "";
-  }
-
-  return GROUP_FORMAT.format(Number(digits));
-};
 
 /** A signed figure for the ledger — the sign is the whole point of the row. */
 export const formatSigned = (row: TransactionRow): string => {

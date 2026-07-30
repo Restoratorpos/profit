@@ -2,9 +2,9 @@ import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
 import { membersPageQuery } from "@/features/members";
 import { DEFAULT_MEMBER_QUERY } from "@/features/members/types";
-import { useCombos, useProducts } from "@/features/products/api";
+import { useCategories, useCombos, useProducts } from "@/features/products/api";
 import { useLocale } from "@/lib/i18n/provider";
-import { type OrderCustomer, toPosProducts } from "../types";
+import { type OrderCustomer, toPosCategories, toPosProducts } from "../types";
 import { OrderComposer } from "./order-composer";
 
 /**
@@ -20,6 +20,13 @@ export const NewOrderPage = () => {
   const { messages } = useLocale();
   const products = useProducts();
   const combos = useCombos();
+  /*
+   * Only the tile colours and names come from here — a product already carries
+   * the id of the category it is in, so the grid can group without this. It is
+   * therefore not gated on below: a slow categories reply leaves the till usable
+   * with everything loose rather than blank.
+   */
+  const categories = useCategories();
   const members = useQuery(membersPageQuery(DEFAULT_MEMBER_QUERY));
 
   const failure = products.error ?? combos.error ?? members.error;
@@ -56,6 +63,7 @@ export const NewOrderPage = () => {
 
   return (
     <OrderComposer
+      categories={toPosCategories(categories.data ?? [])}
       customers={customers}
       messages={messages}
       products={toPosProducts(products.data, combos.data)}

@@ -15,15 +15,47 @@ export {
   withLeg,
 } from "@/lib/payment-legs";
 
-export interface MemberPlanBadge {
-  count: number;
+/** Where one membership stands: mirrors the backend's `MembershipState`. */
+export type MembershipState = "active" | "expiring" | "expired";
+
+/** One membership a member holds, with its own end date, visits and money. */
+export interface MemberMembership {
+  /** Decimal string. Still owed on this one membership: `price - paid`. */
+  debt: string;
+  endsAt: string | null;
+  id: string;
+  /** The plan name. There is no category on `plans`, so this is the type. */
   name: string;
+  /** Decimal string. Taken so far against this membership. */
+  paid: string;
+  /** Which plan it is, so a renewal of the same one can be told apart. */
+  planId: string | null;
+  /**
+   * Decimal string. What it was **charged** — a comp records what was actually
+   * taken, so "0.00 paid of 0.00" is a gift rather than an unpaid sale.
+   */
+  price: string;
+  remainingVisits: number | null;
+  startsAt: string | null;
+  state: MembershipState;
+  /** What it was sold with, so "76 of 80" can be read rather than just "76". */
+  totalVisits: number | null;
+}
+
+/** One time a member came in. */
+export interface MemberVisit {
+  at: string | null;
+  id: number;
 }
 
 export interface MemberListItem {
   birthdate: string | null;
   branchId: string | null;
-  /** Latest end across their memberships, ISO. */
+  /**
+   * The **soonest upcoming** expiry across their memberships, ISO, or null when
+   * none is still running. Not the latest — that hid a lapsing gym plan behind
+   * a year-long sauna package.
+   */
   endsAt: string | null;
   gender: string | null;
   /** True when a face is enrolled on at least one terminal. */
@@ -32,11 +64,13 @@ export interface MemberListItem {
   isActive: boolean;
   /** Decimal string. "0.00" means nothing owed. */
   membershipDebt: string;
+  /**
+   * Every membership they hold, in the order they were sold, each with its own
+   * clock. The first entry is the plan they were originally signed up on.
+   */
+  memberships: MemberMembership[];
   name: string;
   phone: string | null;
-  plans: MemberPlanBadge[];
-  /** Null when no membership counts visits. */
-  remainingVisits: number | null;
   shopDebt: string;
   startsAt: string | null;
   uniqueId: string | null;
@@ -197,3 +231,61 @@ export const todayIso = (): string => formatDay(new Date().toISOString());
 
 export const initialOf = (name: string): string =>
   name.trim().charAt(0).toUpperCase() || "?";
+
+/*
+ * Month names spelled out here rather than taken from `Intl`.
+ *
+ * The runtime's `uz-UZ` data is not consistent across browsers — some ship the
+ * Cyrillic month names, some fall back to English, and a date that reads
+ * differently on the desk terminal than on the manager's laptop is a support
+ * call. A fixed list is the same everywhere.
+ */
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** `"26-July, 2026"` — how a date reads wherever it is shown to the desk. */
+export const formatLongDay = (value: string | null): string => {
+  if (!value) {
+    return "—";
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+
+  return `${parsed.getDate()}-${MONTHS[parsed.getMonth()]}, ${parsed.getFullYear()}`;
+};
+
+/** `"26-July, 2026"` and `"08:18"` — how a visit reads in the list. */
+export const formatVisit = (
+  value: string | null
+): { day: string; time: string } => {
+  if (!value) {
+    return { day: "—", time: "" };
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return { day: "—", time: "" };
+  }
+
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+  return { day: formatLongDay(value), time: `${hours}:${minutes}` };
+};

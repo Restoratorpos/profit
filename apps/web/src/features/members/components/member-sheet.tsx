@@ -1,5 +1,4 @@
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -24,7 +23,7 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { Textarea } from "@repo/design-system/components/ui/textarea";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -35,11 +34,14 @@ import {
   UserPlusIcon,
 } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { FaceDialog } from "@/components/face-dialog";
 import { FaceField } from "@/components/face-field";
+import { MoneyInput } from "@/components/money-input";
 import { removeFace, setFace } from "@/lib/face/api";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { formatAmountInput } from "@/lib/money";
 import { type MemberInput, useCreateMember, useUpdateMember } from "../api";
 import {
   canTypeAmount,
@@ -59,7 +61,8 @@ import {
   withLeg,
 } from "../types";
 
-const NO_PLAN = "__none__";
+/** The "no plan chosen" sentinel: Radix reserves "" for "nothing selected". */
+export const NO_PLAN = "__none__";
 
 interface MemberSheetProperties {
   member?: MemberListItem | null;
@@ -163,7 +166,7 @@ const PaymentPicker = ({
         return (
           <Button
             aria-checked={active}
-            className={cn("h-20 flex-col gap-1.5", active && SELECTED_FILL)}
+            className={cn("h-20 flex-col gap-1.5", active && SELECTED_TINT)}
             disabled={disabled}
             key={option.value}
             onClick={() => onChange(option.value)}
@@ -259,7 +262,7 @@ const PersonFields = ({
       <FieldLabel htmlFor="member-birthdate">
         {messages["members.fieldBirthdate"]}
       </FieldLabel>
-      <DatePicker
+      <DateField
         defaultValue={member?.birthdate?.slice(0, 10) ?? ""}
         disabled={disabled}
         id="member-birthdate"
@@ -314,7 +317,7 @@ const PaymentSummary = ({
   </dl>
 );
 
-interface MembershipSectionProperties {
+export interface MembershipSectionProperties {
   /** What each leg covers, in order — the placeholders are read off this. */
   applied: readonly number[];
   debt: number;
@@ -337,7 +340,7 @@ interface MembershipSectionProperties {
 }
 
 /** The plan being sold and how it is being paid for. */
-const MembershipSection = ({
+export const MembershipSection = ({
   applied,
   debt,
   disabled,
@@ -386,7 +389,7 @@ const MembershipSection = ({
         <FieldLabel htmlFor="member-start">
           {messages["members.fieldStartDate"]}
         </FieldLabel>
-        <DatePicker
+        <DateField
           disabled={disabled || planId === NO_PLAN}
           id="member-start"
           onChange={onStartsAt}
@@ -443,18 +446,17 @@ const MembershipSection = ({
                 {/* The final leg shows the rest as a fact rather than a field:
                     there is no fourth row to carry a shortfall, so it takes
                     whatever is left and only its method is a choice. */}
-                <Input
+                <MoneyInput
                   className={cn(
                     isFixedLeg(index, leg) && "text-muted-foreground"
                   )}
                   disabled={disabled || !canTypeAmount(leg.method)}
                   id={`member-paid-${index}`}
-                  inputMode="decimal"
-                  onChange={(event) => onLegAmount(index, event.target.value)}
+                  onChange={(next) => onLegAmount(index, next)}
                   placeholder={
                     // A qarz's blank box takes nothing; a till's takes the rest.
                     canTypeAmount(leg.method) && leg.method !== "debt"
-                      ? Math.max(outstanding, 0).toFixed(2)
+                      ? formatAmountInput(String(Math.round(outstanding)))
                       : "0"
                   }
                   readOnly={isFixedLeg(index, leg)}
@@ -482,7 +484,7 @@ const MembershipSection = ({
                       return (
                         <Button
                           aria-checked={active}
-                          className={cn(active && SELECTED_FILL)}
+                          className={cn(active && SELECTED_TINT)}
                           disabled={disabled}
                           key={option.value}
                           onClick={() => onLegTill(index, option.value)}

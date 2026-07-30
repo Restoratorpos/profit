@@ -1,6 +1,5 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Empty,
   EmptyDescription,
@@ -31,6 +30,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { IdCode } from "@/components/id-code";
 import type { MemberListItem } from "@/features/members/types";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -215,7 +215,7 @@ export const AttendanceView = ({
         </p>
 
         <div className="flex items-center gap-2">
-          <DatePicker
+          <DateField
             aria-label={messages["attendance.today"]}
             className="w-full sm:w-44"
             onChange={(next) => {
@@ -225,7 +225,7 @@ export const AttendanceView = ({
             value={from}
           />
           <span className="hidden text-muted-foreground sm:inline">—</span>
-          <DatePicker
+          <DateField
             aria-label={messages["attendance.month"]}
             className="w-full sm:w-44"
             onChange={(next) => {

@@ -89,6 +89,42 @@ export const request = (
  */
 let refreshInFlight: Promise<Session | null> | null = null;
 
+/**
+ * The two ways a refresh can fail, which are not the same thing.
+ *
+ * `rejected` is a verdict: the server read the cookie and said no — expired,
+ * rotated away, or the account is gone. The session is genuinely over.
+ *
+ * `unavailable` is the absence of a verdict: the request never completed. A
+ * timeout, a dropped connection, a 502 from the dev proxy, or the API restarting
+ * mid-flight. Nothing was learned about the session, so nothing should be
+ * concluded about it.
+ */
+type RefreshFailure = "rejected" | "unavailable";
+
+/**
+ * Whether a failed refresh means the session is over.
+ *
+ * Only the server actually rejecting the credential does. Treating every
+ * failure as a rejection is what signed people out constantly in development:
+ * `tsx watch` restarts the API on every save, so any request in flight at that
+ * moment failed at the transport, cleared the token, and dropped the session —
+ * with no bad credential anywhere in sight.
+ */
+const failureOf = (response: Response): RefreshFailure =>
+  response.status === 401 || response.status === 403
+    ? "rejected"
+    : "unavailable";
+
+/** Ends the session locally. Signed-out UI and an empty cache follow from this. */
+const endSession = (failure: RefreshFailure): null => {
+  if (failure === "rejected") {
+    setAccessToken(null);
+  }
+
+  return null;
+};
+
 export const refreshSession = (): Promise<Session | null> => {
   refreshInFlight ??= (async () => {
     try {
@@ -99,8 +135,7 @@ export const refreshSession = (): Promise<Session | null> => {
       });
 
       if (!response.ok) {
-        setAccessToken(null);
-        return null;
+        return endSession(failureOf(response));
       }
 
       const session = sessionSchema.parse(await response.json());
@@ -108,8 +143,13 @@ export const refreshSession = (): Promise<Session | null> => {
 
       return session;
     } catch {
-      setAccessToken(null);
-      return null;
+      /*
+       * A throw here is a transport failure or an unreadable body — never a
+       * verdict, because a verdict arrives as a status code. The caller's
+       * request fails and the UI shows an error, but the session survives to be
+       * retried on the next interaction.
+       */
+      return endSession("unavailable");
     } finally {
       refreshInFlight = null;
     }

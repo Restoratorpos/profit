@@ -180,10 +180,16 @@ const DISPOSITION_LABELS: Record<RemovalDisposition, keyof Messages> = {
   returned: "orders.dispositionReturned",
 };
 
-/** One editable line: what it is, what it comes to, and the controls. */
+/**
+ * One editable line: what it is, what it comes to, and the controls.
+ *
+ * No combo badge. A line's name is what the desk is checking against the
+ * customer, and whether it was sold as a bundle changes nothing it can do here —
+ * the quantity and the price are the same controls either way. The picker still
+ * badges combos, where the distinction is the thing being chosen.
+ */
 const EditRow = ({
   disabled,
-  isCombo,
   isRemoved,
   messages,
   name,
@@ -194,7 +200,6 @@ const EditRow = ({
   removal,
 }: {
   disabled: boolean;
-  isCombo: boolean;
   isRemoved: boolean;
   messages: Messages;
   name: string;
@@ -212,21 +217,8 @@ const EditRow = ({
     )}
   >
     <div className="min-w-0 flex-1">
-      <p
-        className={cn(
-          "flex items-center gap-2 font-semibold",
-          isRemoved && "line-through"
-        )}
-      >
-        <span className="truncate">{name}</span>
-        {isCombo ? (
-          <Badge
-            className="shrink-0 border-transparent bg-primary/15 px-1.5 py-0 font-semibold text-[10px] text-primary-accent uppercase tracking-wide"
-            variant="secondary"
-          >
-            {messages["orders.comboBadge"]}
-          </Badge>
-        ) : null}
+      <p className={cn("truncate font-semibold", isRemoved && "line-through")}>
+        {name}
       </p>
       <p className="text-muted-foreground text-sm tabular-nums">
         {formatMoney(price)} × {quantity} ={" "}
@@ -358,7 +350,6 @@ const OrderCard = ({
         return (
           <EditRow
             disabled={disabled}
-            isCombo={item.isCombo}
             isRemoved={quantity === 0}
             key={item.id}
             messages={messages}
@@ -376,7 +367,6 @@ const OrderCard = ({
       {added.map((line) => (
         <EditRow
           disabled={disabled}
-          isCombo={line.kind === "combo"}
           isRemoved={false}
           key={keyOf(line)}
           messages={messages}
@@ -977,14 +967,12 @@ export const OrderEditSheet = ({
               </p>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-muted-foreground text-sm">
+                {/* Text rather than a `tel:` link — the desk terminal is a PC. */}
                 {detail?.member.phone ? (
-                  <a
-                    className="flex items-center gap-1.5 tabular-nums underline-offset-4 hover:text-primary-accent hover:underline"
-                    href={`tel:${detail.member.phone}`}
-                  >
+                  <span className="flex items-center gap-1.5 tabular-nums">
                     <PhoneIcon className="size-3.5 shrink-0" />
                     {formatPhone(detail.member.phone)}
-                  </a>
+                  </span>
                 ) : null}
 
                 {summary?.latestOrderAt ? (

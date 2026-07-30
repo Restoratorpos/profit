@@ -116,7 +116,7 @@ export const CatalogStats = ({ stats }: { stats: readonly CatalogStat[] }) => (
   // No box of its own. These are a caption for the table below, not a panel:
   // given a background and a full row they read as a fourth thing to deal with
   // above a list that might hold one product.
-  <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+  <dl className="flex flex-wrap items-center gap-x-5 gap-y-1 px-2 text-sm sm:px-4">
     {stats.map((stat) => (
       <div className="flex items-baseline gap-1.5" key={stat.label}>
         <dt className="text-muted-foreground">{stat.label}</dt>

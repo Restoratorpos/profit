@@ -1,6 +1,7 @@
 /** Mirrors what apps/backend returns from /orders. */
 
 import {
+  type CategoryListItem,
   type ComboListItem,
   isIngredient,
   type ProductListItem,
@@ -73,7 +74,13 @@ export interface MemberOrderView {
 }
 
 export interface MemberOrderDetail {
-  member: { id: string; name: string; phone: string | null };
+  member: {
+    /** The short card number. Null for a member of staff — they have none. */
+    code: string | null;
+    id: string;
+    name: string;
+    phone: string | null;
+  };
   orders: MemberOrderView[];
   paid: string;
   remaining: string;
@@ -191,6 +198,8 @@ export interface OrderCustomer {
  * no colour of its own, so its tile falls back to the default background.
  */
 export interface PosProduct {
+  /** Which group the tile lives behind on the till. Null means it lives loose. */
+  categoryId: string | null;
   color: string | null;
   id: string;
   kind: "product" | "combo";
@@ -198,6 +207,30 @@ export interface PosProduct {
   price: string | null;
   productType: string | null;
 }
+
+/** A group of tiles on the till: its own tile until it is opened. */
+export interface PosCategory {
+  color: string | null;
+  id: string;
+  name: string;
+}
+
+/**
+ * The categories the till groups by.
+ *
+ * Taken from `/categories` rather than from the distinct names on the products,
+ * because a category owns a colour the desk chose for it and a product row only
+ * carries the name. Empty ones are dropped by the grid, not here — which of them
+ * has anything to show depends on the tab and the search.
+ */
+export const toPosCategories = (
+  categories: readonly CategoryListItem[]
+): PosCategory[] =>
+  categories.map((category) => ({
+    color: category.color,
+    id: category.id,
+    name: category.name,
+  }));
 
 /**
  * The one sellable list both the POS grid and the edit sheet's product picker
@@ -215,6 +248,7 @@ export const toPosProducts = (
   ...products
     .filter((product) => product.isActive && !isIngredient(product))
     .map((product) => ({
+      categoryId: product.categoryId,
       color: product.color,
       id: product.id,
       kind: "product" as const,
@@ -223,6 +257,7 @@ export const toPosProducts = (
       productType: product.productType,
     })),
   ...combos.map((combo) => ({
+    categoryId: combo.categoryId,
     color: null,
     id: combo.id,
     kind: "combo" as const,

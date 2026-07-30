@@ -147,3 +147,42 @@ export const workerQuerySchema = z.object({
 });
 
 export type WorkerQueryInput = z.infer<typeof workerQuerySchema>;
+
+/**
+ * The salary-history screen: every wage handed over, newest first.
+ *
+ * Narrowed on `paid_at` rather than the `salary:YYYY-MM` period tag, because
+ * the question this answers is "what left the till, and when" — a July wage
+ * paid on 3 August belongs to August's history and July's payroll, and those
+ * are two different screens. The period rides along as a column so the two can
+ * still be reconciled by eye.
+ *
+ * `workerId` is optional and means "everyone" when absent, which is what the
+ * screen opens on.
+ */
+export const salaryHistoryQuerySchema = z.object({
+  from: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  to: z.string().trim().optional(),
+  workerId: z.string().trim().min(1).max(20).optional(),
+});
+
+export type SalaryHistoryQueryInput = z.infer<typeof salaryHistoryQuerySchema>;
+
+/**
+ * The day of the month a monthly salary is settled on.
+ *
+ * Capped at 28 rather than 31 because every month has a 28th. A payday of the
+ * 30th would simply not occur in February, and "the salary that month came late
+ * and nobody knows why" is a worse answer than not offering the day at all.
+ */
+export const paydaySchema = z.object({
+  payday: z.coerce
+    .number()
+    .int()
+    .min(1, "Pick a day between 1 and 28")
+    .max(28, "Pick a day between 1 and 28"),
+});
+
+export type PaydayInput = z.infer<typeof paydaySchema>;

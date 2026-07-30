@@ -6,7 +6,7 @@
 
 GYM is the application layer over **FITZLY**, a multi-tenant gym CRM:
 
-- A **Next.js web app** (`apps/app`, :3000) behind a session.
+- A **React + Vite SPA** (`apps/web`, :3001) behind a session.
 - A **Hono API** (`apps/backend`, :7090) that owns the `gyms` database in MySQL.
 - Staff sign in with a **phone number and password** — not email. Phone numbers are stored and compared as bare digits; the UI offers Uzbekistan, Kazakhstan, Kyrgyzstan, Tajikistan, Turkmenistan and Russia, and accepts any human formatting (`+998 90 766 17 70` → `998907661770`).
 - Accounts are rows in **`workers`**, carrying a role of `owner`, `admin`, `manager`, `trainer` or `receptionist`.

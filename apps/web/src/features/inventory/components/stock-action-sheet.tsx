@@ -26,6 +26,7 @@ import { Textarea } from "@repo/design-system/components/ui/textarea";
 import { TruckIcon, XIcon } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { CreatableCombobox } from "@/components/creatable-combobox";
+import { MoneyInput } from "@/components/money-input";
 import type { ProductListItem } from "@/features/products/types";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -365,13 +366,10 @@ export const StockActionSheet = ({
                           <FieldLabel htmlFor={`cost-${line.productId}`}>
                             {messages["inventory.fieldUnitCost"]}
                           </FieldLabel>
-                          <Input
+                          <MoneyInput
                             id={`cost-${line.productId}`}
-                            inputMode="decimal"
-                            onChange={(event) =>
-                              setLine(line.productId, {
-                                unitCost: event.target.value,
-                              })
+                            onChange={(next) =>
+                              setLine(line.productId, { unitCost: next })
                             }
                             value={line.unitCost}
                           />
@@ -400,10 +398,9 @@ export const StockActionSheet = ({
                   <FieldLabel htmlFor="stock-paid">
                     {messages["inventory.fieldPaid"]}
                   </FieldLabel>
-                  <Input
+                  <MoneyInput
                     id="stock-paid"
-                    inputMode="decimal"
-                    onChange={(event) => setPaidAmount(event.target.value)}
+                    onChange={setPaidAmount}
                     value={paidAmount}
                   />
                 </Field>

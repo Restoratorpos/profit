@@ -25,7 +25,7 @@ import {
 } from "@repo/design-system/components/ui/select";
 import { Separator } from "@repo/design-system/components/ui/separator";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -35,6 +35,7 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -377,11 +378,10 @@ export const PayWorkerDialog = ({
                 <FieldLabel htmlFor="pay-amount">
                   {messages["workers.payAmount"]} *
                 </FieldLabel>
-                <Input
+                <MoneyInput
                   autoComplete="off"
                   id="pay-amount"
-                  inputMode="decimal"
-                  onChange={(event) => setAmount(event.target.value)}
+                  onChange={setAmount}
                   value={amount}
                 />
               </Field>
@@ -416,7 +416,7 @@ export const PayWorkerDialog = ({
                     return (
                       <Button
                         aria-checked={isActive}
-                        className={cn(isActive && SELECTED_FILL)}
+                        className={cn(isActive && SELECTED_TINT)}
                         key={option.value}
                         onClick={() => setMethod(option.value)}
                         role="radio"

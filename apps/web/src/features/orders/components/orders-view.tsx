@@ -1,7 +1,6 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   InputGroup,
   InputGroupAddon,
@@ -18,6 +17,7 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -152,27 +152,72 @@ export const OrdersView = ({
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 sm:p-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            <DatePicker
-              aria-label={messages["orders.rangeStart"]}
-              className="w-full sm:w-44"
-              onChange={(next) => editDates("from", next)}
-              value={from}
-            />
-            <span className="hidden text-muted-foreground sm:inline">—</span>
-            <DatePicker
-              aria-label={messages["orders.rangeEnd"]}
-              className="w-full sm:w-44"
-              onChange={(next) => editDates("to", next)}
-              value={to}
-            />
+      {/*
+       * One toolbar of two rows rather than two toolbars, and the rows are ranked:
+       * which orders, then which period. Both "pick one of these" controls are the
+       * same segmented group the till's Bar/Do'kon tabs use — they were an outline
+       * row and a ghost row before, which made one set of tabs look like buttons
+       * and the other like links.
+       */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div
+            aria-label={messages["nav.orders"]}
+            className="flex items-center gap-1 rounded-lg bg-muted p-1"
+            role="radiogroup"
+          >
+            {FILTERS.map((option) => {
+              const active = filter === option.key;
+
+              return (
+                <Button
+                  aria-checked={active}
+                  className={cn("gap-2", !active && "text-muted-foreground")}
+                  key={option.key}
+                  onClick={() => changeFilter(option.key)}
+                  role="radio"
+                  size="sm"
+                  type="button"
+                  variant={active ? "default" : "ghost"}
+                >
+                  {messages[option.labelKey]}
+                  <span className="font-semibold tabular-nums opacity-70">
+                    {counts[option.key]}
+                  </span>
+                </Button>
+              );
+            })}
           </div>
 
+          {/* Sized, not stretched — the same rule the roster's search follows. */}
+          <div className="w-72 max-w-full">
+            <InputGroup>
+              <InputGroupAddon align="inline-start">
+                <SearchIcon className="size-5" />
+              </InputGroupAddon>
+              <InputGroupInput
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(0);
+                }}
+                placeholder={messages["orders.search"]}
+                value={query}
+              />
+            </InputGroup>
+          </div>
+
+          <Button asChild className="ml-auto">
+            <Link to="/orders/new">
+              <PlusIcon className="size-5" />
+              {messages["orders.newOrder"]}
+            </Link>
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
           <div
             aria-label={messages["orders.rangeAll"]}
-            className="flex flex-wrap items-center gap-2"
+            className="flex items-center gap-1 rounded-lg bg-muted p-1"
             role="radiogroup"
           >
             {PRESETS.map((option) => {
@@ -181,6 +226,7 @@ export const OrdersView = ({
               return (
                 <Button
                   aria-checked={active}
+                  className={cn(!active && "text-muted-foreground")}
                   key={option.key}
                   onClick={() => applyPreset(option.key)}
                   role="radio"
@@ -193,62 +239,28 @@ export const OrdersView = ({
               );
             })}
           </div>
-        </div>
 
-        <Button asChild>
-          <Link to="/orders/new">
-            <PlusIcon className="size-5" />
-            {messages["orders.newOrder"]}
-          </Link>
-        </Button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div
-          aria-label={messages["nav.orders"]}
-          className="flex items-center gap-2"
-          role="radiogroup"
-        >
-          {FILTERS.map((option) => {
-            const active = filter === option.key;
-
-            return (
-              <Button
-                aria-checked={active}
-                key={option.key}
-                onClick={() => changeFilter(option.key)}
-                role="radio"
-                type="button"
-                variant={active ? "default" : "outline"}
-              >
-                {messages[option.labelKey]}
-                <span
-                  className={cn(
-                    "font-semibold",
-                    !active && "text-muted-foreground"
-                  )}
-                >
-                  {counts[option.key]}
-                </span>
-              </Button>
-            );
-          })}
-        </div>
-
-        <div className="ml-auto min-w-64 flex-1 md:max-w-sm">
-          <InputGroup>
-            <InputGroupAddon align="inline-start">
-              <SearchIcon className="size-5" />
-            </InputGroupAddon>
-            <InputGroupInput
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setPage(0);
-              }}
-              placeholder={messages["orders.search"]}
-              value={query}
+          {/* The two ends carry their own labels as placeholders. Empty and
+              unlabelled, they were two wide boxes holding a calendar glyph and
+              nothing else — which reads as a control that failed to load rather
+              than as "no bound set". */}
+          <div className="flex items-center gap-2">
+            <DateField
+              aria-label={messages["orders.rangeStart"]}
+              className="w-40"
+              onChange={(next) => editDates("from", next)}
+              placeholder={messages["orders.rangeStart"]}
+              value={from}
             />
-          </InputGroup>
+            <span className="text-muted-foreground">—</span>
+            <DateField
+              aria-label={messages["orders.rangeEnd"]}
+              className="w-40"
+              onChange={(next) => editDates("to", next)}
+              placeholder={messages["orders.rangeEnd"]}
+              value={to}
+            />
+          </div>
         </div>
       </div>
 

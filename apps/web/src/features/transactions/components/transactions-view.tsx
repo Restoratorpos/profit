@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { toBareAmount } from "@/lib/money";
 import {
   useCreateExpense,
   useCreateIncome,
@@ -11,7 +12,6 @@ import {
   categoryNeedsMember,
   categoryNeedsSupplier,
   categoryNeedsWorker,
-  digitsOnly,
   type LedgerFilter,
   type TransactionPage,
   type TransactionParties,
@@ -104,7 +104,7 @@ export const TransactionsView = ({
     form.workerId === null;
 
   const handleSave = () => {
-    const amount = digitsOnly(form.amount);
+    const amount = toBareAmount(form.amount);
     const note = form.note.trim() || null;
 
     if (tab === "transfer") {
