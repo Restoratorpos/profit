@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { purgeCache } from "@/lib/query-client";
@@ -20,8 +21,17 @@ import { onAccessTokenCleared } from "./tokens";
 
 export interface AuthState {
   isAuthenticated: boolean;
+  /**
+   * The boot check could not reach the API, so whether there is a session is
+   * still unknown. Distinct from signed-out: nothing has been ruled out, and
+   * routing on it would bounce a signed-in operator to the sign-in screen over
+   * a dropped packet.
+   */
+  isOffline: boolean;
   /** True until the boot session check has answered. Guards must not run yet. */
   isRestoring: boolean;
+  /** Asks again after an `isOffline` boot. */
+  retryRestore: () => void;
   signIn: (phone: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   /** Onboards a whole tenant — gym, branch and owner — and signs them in. */
@@ -49,6 +59,55 @@ export const AuthProvider = ({
 }: AuthProviderProperties) => {
   const [user, setUser] = useState<AuthUser | null>(initialUser);
   const [isRestoring, setIsRestoring] = useState(restoreOnMount);
+  const [isOffline, setIsOffline] = useState(false);
+
+  /**
+   * Which restore is the current one.
+   *
+   * Bumping it abandons whatever is in flight, which is what both unmounting and
+   * retrying need — and StrictMode's double mount means a discarded first
+   * attempt is the ordinary case in development, not an edge one.
+   */
+  const attemptRef = useRef(0);
+
+  /**
+   * Nothing awaits this, so it must not be able to reject.
+   *
+   * `restoreSession` reports failure by returning rather than throwing, and the
+   * only thing left that can raise is a state update landing after this tree is
+   * gone. An unhandled rejection from the boot path is worth ruling out on its
+   * own: it surfaces nowhere useful and takes a test worker down with it.
+   */
+  const restore = useCallback(async (): Promise<void> => {
+    attemptRef.current += 1;
+    const attempt = attemptRef.current;
+
+    try {
+      setIsRestoring(true);
+      setIsOffline(false);
+
+      const outcome = await restoreSession();
+
+      if (attemptRef.current !== attempt) {
+        return;
+      }
+
+      // Only a verdict moves the user. An unreachable API leaves whoever was
+      // signed in exactly where they were and says so, rather than quietly
+      // demoting them to signed-out.
+      if (outcome.status === "session") {
+        setUser(outcome.session.user);
+      } else if (outcome.status === "signed-out") {
+        setUser(null);
+      }
+
+      setIsOffline(outcome.status === "offline");
+      setIsRestoring(false);
+    } catch {
+      // Only reachable once this provider is unmounted, in which case there is
+      // nothing left to tell.
+    }
+  }, []);
 
   /*
    * The session is restored here rather than with a top-level await in main.tsx.
@@ -57,32 +116,25 @@ export const AuthProvider = ({
    * proxy pointing at a backend that is not listening will hold one open rather
    * than refuse it — meant React never mounted at all: a permanently blank page,
    * no error, nothing to debug. Restoring inside React means the shell always
-   * paints and a stuck backend shows as a loading state that eventually resolves
-   * to the sign-in screen.
+   * paints and a stuck backend shows as a loading state that eventually resolves.
    */
   useEffect(() => {
     if (!restoreOnMount) {
       return;
     }
 
-    let cancelled = false;
-
-    restoreSession()
-      .then((session) => {
-        if (!cancelled) {
-          setUser(session?.user ?? null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsRestoring(false);
-        }
-      });
+    restore();
 
     return () => {
-      cancelled = true;
+      // Abandons the in-flight attempt rather than letting it set state after
+      // this provider is gone.
+      attemptRef.current += 1;
     };
-  }, [restoreOnMount]);
+  }, [restoreOnMount, restore]);
+
+  const retryRestore = useCallback(() => {
+    restore();
+  }, [restore]);
 
   /*
    * A refresh can fail long after boot — the token expired, the account was
@@ -127,12 +179,14 @@ export const AuthProvider = ({
     () => ({
       user,
       isAuthenticated: user !== null,
+      isOffline,
       isRestoring,
+      retryRestore,
       signIn,
       signOut,
       signUp,
     }),
-    [user, isRestoring, signIn, signOut, signUp]
+    [user, isOffline, isRestoring, retryRestore, signIn, signOut, signUp]
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;

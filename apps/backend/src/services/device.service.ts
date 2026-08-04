@@ -33,6 +33,7 @@ import {
   putPerson,
   toDeviceEmployeeNo,
 } from "../lib/hikvision.js";
+import { localAddressToward } from "../lib/lan-address.js";
 import { logger } from "../lib/logger.js";
 import {
   canStoreSecrets,
@@ -362,6 +363,11 @@ export const testDevice = async (
  * That happened between 28 and 30 July 2026: the desk PC moved from
  * .106 to .105 and two days of scans went nowhere.
  *
+ * `enablePush` now derives the address instead of reading it from config, so a
+ * boot re-applies wherever this machine actually is rather than re-applying a
+ * value that went stale with it. The two halves are what make a moved lease
+ * cost one restart: this decides *when* to re-tell them, that decides *what*.
+ *
  * Re-applying on every boot removes the failure rather than reporting it. It is
  * unconditional instead of compared-first because the push config is idempotent
  * and a read is a second round trip to a device that may be asleep; writing it
@@ -403,9 +409,19 @@ export const republishPushHosts = async (gymId: string): Promise<void> => {
 };
 
 /**
- * Tells the terminal where to POST its scans. Needs DEVICE_CALLBACK_HOST,
- * because the address the *device* can reach us on is a LAN address that no
- * incoming request can tell us.
+ * Tells the terminal where to POST its scans.
+ *
+ * The address it needs is the one *this machine* answers on over the LAN, which
+ * no incoming request can reveal — the browser reaches us by a different path
+ * than the door does. So it is derived by asking the OS which local address it
+ * would route to this particular terminal from, and `DEVICE_CALLBACK_HOST` is
+ * kept only as an override for a network where that answer is wrong.
+ *
+ * Deriving it rather than configuring it is what stops the leases moving from
+ * ending attendance. A wrong address here fails in one direction only: the
+ * terminal accepts the destination, the devices page still reads "connected"
+ * because that only tests the call *out*, and every scan is posted into
+ * nothing. Nobody finds out until someone asks why the day is empty.
  */
 export const enablePush = async (
   gymId: string,
@@ -413,23 +429,25 @@ export const enablePush = async (
 ): Promise<{ host: string; path: string; port: number }> => {
   const device = await findDevice(gymId, deviceId);
 
-  if (!config.devices.callbackHost) {
-    throw new BadRequestError(
-      "DEVICE_CALLBACK_HOST is not set — the terminal needs the LAN address of this server to push events to"
-    );
-  }
-
   if (!device.webhookKey) {
     throw new BadRequestError("This terminal has no webhook key");
   }
 
+  const target = targetOf(device);
+  const host =
+    config.devices.callbackHost ?? (await localAddressToward(target.host));
+
+  if (!host) {
+    throw new BadRequestError(
+      "Could not work out this server's LAN address from the terminal's — set DEVICE_CALLBACK_HOST to the address the terminal should post events to"
+    );
+  }
+
   const destination = {
-    host: config.devices.callbackHost,
+    host,
     path: webhookPathOf(device.webhookKey),
     port: config.devices.callbackPort,
   };
-
-  const target = targetOf(device);
 
   await configurePushHost(target, destination);
 

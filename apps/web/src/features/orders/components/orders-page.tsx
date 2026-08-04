@@ -1,9 +1,12 @@
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { getRouteApi } from "@tanstack/react-router";
 import { useCombos, useProducts } from "@/features/products/api";
 import { useLocale } from "@/lib/i18n/provider";
 import { useOrders } from "../api";
-import { toPosProducts } from "../types";
+import { orderSeedFrom, toPosProducts } from "../types";
 import { OrdersView } from "./orders-view";
+
+const route = getRouteApi("/_authed/orders/");
 
 /**
  * What `app/(authenticated)/orders/page.tsx` was.
@@ -14,6 +17,7 @@ import { OrdersView } from "./orders-view";
  */
 export const OrdersPage = () => {
   const { locale, messages } = useLocale();
+  const seed = orderSeedFrom(route.useSearch());
   const orders = useOrders();
   const products = useProducts();
   const combos = useCombos();
@@ -43,10 +47,13 @@ export const OrdersPage = () => {
   }
 
   return (
+    // Keyed by the seed so a change of URL re-applies it — see MembersPage.
     <OrdersView
+      key={`${seed.filter}|${seed.q}`}
       locale={locale}
       messages={messages}
       products={toPosProducts(products.data, combos.data)}
+      seed={seed}
       summaries={orders.data}
     />
   );

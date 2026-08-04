@@ -34,6 +34,7 @@ import { DateField } from "@/components/date-field";
 import { IdCode } from "@/components/id-code";
 import type { MemberListItem } from "@/features/members/types";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useAttendanceSessions,
@@ -71,6 +72,7 @@ export const AttendanceView = ({
   members,
   messages,
 }: AttendanceViewProperties) => {
+  const { locale } = useLocale();
   const initial = useMemo(() => presetRange("month"), []);
 
   const [from, setFrom] = useState(initial.from);
@@ -179,7 +181,7 @@ export const AttendanceView = ({
   };
 
   const handleExport = () => {
-    const blob = new Blob([toCsv(rows, messages)], {
+    const blob = new Blob([toCsv(rows, messages, locale)], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -321,7 +323,7 @@ export const AttendanceView = ({
               </TableHeader>
               <TableBody>
                 {rows.map((row) => {
-                  const entry = formatEntry(row.at);
+                  const entry = formatEntry(row.at, locale);
 
                   return (
                     <TableRow key={row.memberId}>

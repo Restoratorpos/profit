@@ -24,8 +24,10 @@ import { cn } from "@repo/design-system/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, HistoryIcon, SearchIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { formatStamp } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { formatQuantity, type MovementView, movementLabel } from "../types";
 
 interface HistoryViewProperties {
@@ -61,24 +63,8 @@ const matchesFilter = (movement: MovementView, filter: Filter): boolean => {
   return kind === filter;
 };
 
-const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  month: "short",
-});
-
-const formatWhen = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? "—" : DATE_FORMAT.format(parsed);
-};
-
 export const HistoryView = ({ messages, movements }: HistoryViewProperties) => {
+  const { locale } = useLocale();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
 
@@ -202,7 +188,7 @@ export const HistoryView = ({ messages, movements }: HistoryViewProperties) => {
                 return (
                   <TableRow key={movement.id}>
                     <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                      {formatWhen(movement.time)}
+                      {formatStamp(movement.time, locale)}
                     </TableCell>
                     <TableCell className="font-medium">
                       {movement.productName ?? "—"}

@@ -1,3 +1,4 @@
+
 /**
  * Only ever follow a same-origin path.
  *
@@ -19,6 +20,7 @@ export const safeDestination = (value: string | undefined): string => {
     return "/";
   }
 
+  
   const second = value[1];
 
   return second === "/" || second === "\\" ? "/" : value;

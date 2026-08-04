@@ -8,6 +8,7 @@ Turborepo monorepo (pnpm workspaces), originally scaffolded from **next-forge**.
 apps/
   web/       React 19 + Vite SPA (TanStack Router/Query) → localhost:3001
   backend/   Hono API on Node (tsx/tsc, ESM)             → localhost:7090
+  mobile/    Expo (React Native) manager app, iOS/Android via EAS
 packages/
   auth/               phone input + normalization. The next-auth half is dead —
                       see "Auth" below.
@@ -94,6 +95,18 @@ Rules:
 - Refresh tokens **rotate**, and the spent one is denylisted in Redis. They
   carry a `jti` because without it two refreshes inside the same second signed
   byte-identical tokens and the second was rejected as already-revoked.
+- A spent refresh token keeps answering with the **same replacement for a
+  minute** rather than 401ing. Rotation revokes on the server while the
+  replacement travels back in the response, so a lost response used to leave the
+  browser holding a dead cookie — an unrecoverable sign-out caused by reloading
+  during the boot refresh. See `ROTATION_GRACE_SECONDS` in
+  `apps/backend/src/lib/token-denylist.ts`.
+- **The boot refresh is the only thing deciding whether a reload lands in the
+  app or at sign-in**, so it distinguishes three answers, not two: a session, a
+  rejection, or `offline` — an API that could not be reached at all. Only a
+  rejection signs anyone out; `offline` retries and then says so on its own
+  screen, because a sign-in form needs the same server that just failed to
+  answer. `__tests__/session-survival.test.ts` and `boot.test.tsx` guard it.
 - Boot must not block on the session check. `AuthProvider` restores behind an
   `isRestoring` flag; a top-level `await` before `createRoot().render()` meant a
   hung request left a permanently blank page. `__tests__/boot.test.tsx` guards it.
@@ -122,6 +135,14 @@ route-file clobbering warning. Read it before touching routes. In brief:
 - Source-only packages set `declaration: false` — pnpm's non-hoisted layout otherwise trips TS2742 on re-exported types.
 - **`apps/web` aliases `@repo/*` by path in `vite.config.ts`.** Design-system files import the package by its own name and it declares no self-dependency, so Rollup cannot resolve it from the importer. Dev works without the alias; the production build does not.
 - Test scripts must **not** use the `NODE_ENV=test cmd` shell prefix — this repo is developed on Windows, where that is a parse error. Vitest already sets `NODE_ENV=test`.
+- **`@types/react` is pinned repo-wide by `pnpm.overrides`** in the root
+  `package.json`, and must stay that way. Expo SDK 54 wants `~19.1`, apps/web
+  wants `19.2`, and pnpm hoists exactly one of them into
+  `node_modules/.pnpm/node_modules/`. Packages that do not declare `@types/react`
+  themselves — `react-day-picker`, `lucide-react` — resolve it from there, so the
+  losing version made `pnpm --filter web typecheck` fail with "Two different
+  types with this name exist" inside `packages/design-system`. `apps/mobile` sets
+  `expo.install.exclude` so `expo install --fix` does not undo the pin.
 
 ## Gotchas
 

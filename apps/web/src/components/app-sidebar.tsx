@@ -85,12 +85,14 @@ export const AppSidebar = ({ messages }: AppSidebarProperties) => {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="h-18 justify-center">
+      {/* Same height as the topbar's `sm:h-14`, so the brand and the gym name
+          sit on one line rather than a step. */}
+      <SidebarHeader className="h-14 justify-center">
         <SidebarMenu>
           <SidebarMenuItem>
             <Link
               className={cn(
-                "flex h-12 items-center transition-all",
+                "flex h-9 items-center transition-all",
                 open ? "px-3" : "justify-center px-0"
               )}
               to="/"
@@ -100,9 +102,9 @@ export const AppSidebar = ({ messages }: AppSidebarProperties) => {
                   for screen readers. */}
               <Logo
                 accentClassName="text-primary-accent"
-                markClassName="size-8 shrink-0 text-primary"
+                markClassName="size-7 shrink-0 text-primary"
                 markOnly={!open}
-                wordmarkClassName="text-xl"
+                wordmarkClassName="text-lg"
               />
             </Link>
           </SidebarMenuItem>

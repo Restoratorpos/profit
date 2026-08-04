@@ -6,7 +6,7 @@ import {
   isIngredient,
   type ProductListItem,
 } from "@/features/products/types";
-import type { Locale } from "@/lib/i18n/config";
+import { formatDate, formatDay, toDate, toDateInput } from "@/lib/date";
 import {
   endsChain,
   legTakes,
@@ -189,6 +189,8 @@ export const isOwed = (total: number, legs: readonly PaymentLeg[]): boolean => {
 
 /** The slice of a member the POS customer picker needs. */
 export interface OrderCustomer {
+  /** Their own short code (`A02`) — what the desk says out loud. */
+  code: string | null;
   id: string;
   name: string;
   phone: string | null;
@@ -209,6 +211,16 @@ export interface PosProduct {
   price: string | null;
   productType: string | null;
 }
+
+/** A tile the desk has rung up, and how many of it. */
+export interface CartLine {
+  product: PosProduct;
+  quantity: number;
+}
+
+/** A tile's price as a number. The wire carries a decimal string. */
+export const priceOf = (product: PosProduct): number =>
+  Number(product.price ?? 0);
 
 /** A group of tiles on the till: its own tile until it is opened. */
 export interface PosCategory {
@@ -318,33 +330,53 @@ export const ORDER_FILTERS = ["unpaid", "paid", "all"] as const;
 
 export type OrderFilter = (typeof ORDER_FILTERS)[number];
 
-/** The date-range shortcuts above the list. `all` clears both bounds. */
-export const DATE_PRESETS = ["today", "week", "month", "year", "all"] as const;
+/** The part of the orders list another screen can hand over in a URL. */
+export interface OrderSeed {
+  filter: OrderFilter;
+  q: string;
+}
+
+/**
+ * What the orders list opens on when the URL says nothing.
+ *
+ * `unpaid` is the tab this screen has always started on; naming it here means
+ * the dashboard's link to the unpaid list and the screen's own default cannot
+ * drift apart.
+ */
+export const DEFAULT_ORDER_SEED: OrderSeed = { filter: "unpaid", q: "" };
+
+/** The URL, filled back out into the controls' opening values. */
+export const orderSeedFrom = (search: Partial<OrderSeed>): OrderSeed => ({
+  filter: search.filter ?? DEFAULT_ORDER_SEED.filter,
+  q: search.q ?? DEFAULT_ORDER_SEED.q,
+});
+
+/**
+ * The date-range shortcuts. `any` clears both bounds.
+ *
+ * It is `any` rather than `all` because `OrderFilter` has an `"all"` too, and
+ * the two sat forty lines apart in this file meaning different things — "all
+ * statuses" and "all time". That identifier collision is what let the *copy*
+ * collision happen: both rendered a button reading "Barchasi", one above the
+ * other, and neither said which question it was answering.
+ */
+export const DATE_PRESETS = ["today", "week", "month", "year", "any"] as const;
 
 export type DatePreset = (typeof DATE_PRESETS)[number];
 
 /** A member owes money when their remaining balance is above zero. */
 export const hasDebt = (value: string): boolean => Number(value) > 0;
 
-const LOCALE_TAG: Record<Locale, string> = {
-  uz: "uz-UZ",
-  ru: "ru-RU",
-  en: "en-US",
-};
-
 /** `"YYYY-MM-DD"` from a Date, in local time — the value a date input holds. */
-export const toDateInput = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
+export { toDateInput } from "@/lib/date";
 
 /**
  * The [from, to] a preset selects, as `"YYYY-MM-DD"` bounds the date inputs can
  * show and edit. Ranges are "the last week/month/year up to today", which is how
  * the desk reads them — everything since a point back from now.
+ *
+ * `any` falls to the default branch and clears both bounds, which is the same
+ * thing "no date limit" has always meant here.
  */
 export const rangeForPreset = (
   preset: DatePreset
@@ -372,6 +404,45 @@ export const rangeForPreset = (
   return { from: toDateInput(from), to };
 };
 
+/**
+ * Which preset a range **is**, rather than which one was last pressed.
+ *
+ * These used to be two pieces of state. `applyPreset` wrote both; editing a
+ * bound by hand wrote the bound and reset the highlight to "all" — so the
+ * toolbar lit "no date limit" while two limits were in force. Nothing reconciled
+ * them because nothing could: they were two facts about one thing.
+ *
+ * Derived, that state is unrepresentable. The bounds are the only truth and the
+ * highlight is read back off them, so a lit preset cannot disagree with the list
+ * underneath it.
+ *
+ * `rangeForPreset` recomputes against *now* on every call, so a terminal left
+ * open across midnight finds a stored "week" no longer matching the recomputed
+ * week and falls back to spelling the two dates out. That is a stale truth
+ * rather than a lie — the stored range genuinely is not "the last week" any more.
+ */
+export const presetOf = (from: string, to: string): DatePreset | "custom" => {
+  for (const preset of DATE_PRESETS) {
+    const range = rangeForPreset(preset);
+
+    if (range.from === from && range.to === to) {
+      return preset;
+    }
+  }
+
+  return "custom";
+};
+
+/**
+ * `"12 iyul"` — one end of a range, short enough to sit on a toolbar button.
+ *
+ * `formatDay` parses a bare `"2026-07-12"` field by field rather than through
+ * `new Date(value)`, which would read it as UTC midnight and render the 11th
+ * west of Greenwich. This string is what tells the operator which period the
+ * list is showing, so it has to name the day that was picked.
+ */
+export const formatDayShort = formatDay;
+
 /** Inclusive membership test for a member's latest-order day against a range. */
 export const isWithinRange = (
   isoDate: string | null,
@@ -396,73 +467,18 @@ export const isWithinRange = (
   return true;
 };
 
-const parseDate = (value: string | null): Date | null => {
-  if (!value) {
-    return null;
-  }
+/** `"6 iyul, 2026 01:20"` — the localised stamp shown on an order. */
+export { formatDateTime } from "@/lib/date";
 
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-/** `"6 iyul 2026, 01:20"` — the localised stamp shown on an order. */
-export const formatDateTime = (
-  value: string | null,
-  locale: Locale
-): string => {
-  const parsed = parseDate(value);
-
-  if (!parsed) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(parsed);
-};
-
-/** `"6 iyul 2026"` — the day header a group of orders sits under. */
-export const formatDayLabel = (
-  value: string | null,
-  locale: Locale
-): string => {
-  const parsed = parseDate(value);
-
-  if (!parsed) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(parsed);
-};
+/** `"6 iyul, 2026"` — the day header a group of orders sits under. */
+export const formatDayLabel = formatDate;
 
 /** `"01:20"` — just the time, shown per order beneath its day header. */
-export const formatTime = (value: string | null, locale: Locale): string => {
-  const parsed = parseDate(value);
-
-  if (!parsed) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(parsed);
-};
+export { formatTime } from "@/lib/date";
 
 /** The calendar day of an ISO value, for grouping orders under one header. */
 export const dayKeyOf = (value: string | null): string => {
-  const parsed = parseDate(value);
+  const parsed = toDate(value);
 
   return parsed ? toDateInput(parsed) : "unknown";
 };

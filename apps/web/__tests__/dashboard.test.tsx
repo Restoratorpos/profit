@@ -329,4 +329,71 @@ describe("dashboard", () => {
     expect(screen.getByText("Sardor Yusupov")).toBeDefined();
     expect(screen.getByText(digits("75000"))).toBeDefined();
   });
+
+  /**
+   * The attention lists are a to-do, and a to-do whose only exit is an
+   * unfiltered table makes the operator search for what they were just looking
+   * at. Each row therefore carries the one term that finds it again on its own
+   * screen — the member's phone rather than their name, because two members can
+   * share a name and the desk is about to ring this one.
+   */
+  it("hands each row's screen the term that finds it again", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    const href = (name: string) =>
+      screen.getByRole("link", { name }).getAttribute("href");
+
+    /*
+     * The `%22` around the phone are quotes, and they are the router's doing
+     * rather than a mistake: it JSON-encodes search values, so an all-digit term
+     * has to be quoted or it reads back as a number. `lib/search-text.ts`
+     * accepts it either way, which is what keeps a hand-trimmed link working.
+     */
+    expect(href("Dilnoza Karimova")).toBe("/members?q=%22998901234567%22");
+    expect(href("Suv 0.5")).toBe("/inventory?q=Suv+0.5");
+    expect(href("Sardor Yusupov")).toBe(
+      "/orders?filter=unpaid&q=Sardor+Yusupov"
+    );
+  });
+
+  /**
+   * "Hammasi" opens the whole list the six rows were the head of, already
+   * narrowed to what the card is about. The stock card sorts instead of
+   * filtering: it mixes "kam qoldi" with "tugagan" and that screen filters by
+   * one status at a time, so picking one would hide half the rows the card had
+   * just shown.
+   */
+  it("opens each card's own slice rather than an unfiltered screen", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    const seeAll = screen
+      .getAllByRole("link", { name: "Hammasi" })
+      .map((link) => link.getAttribute("href"));
+
+    expect(seeAll).toEqual([
+      "/members?filter=expiring",
+      "/inventory?sort=stock",
+      "/orders?filter=unpaid",
+    ]);
+  });
+
+  /**
+   * The number is the next action, not a readout — on the desk's tablet this
+   * dials. `formatPhone` groups it for reading; the href must stay bare digits
+   * behind a `+`, which is the only form a dialler is guaranteed to understand.
+   */
+  it("makes an expiring member's phone the call", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    const call = screen.getByTitle("Qo'ng'iroq qilish");
+
+    expect(call.getAttribute("href")).toBe("tel:+998901234567");
+    expect(call.textContent?.replace(/\D/g, "")).toBe("998901234567");
+  });
 });

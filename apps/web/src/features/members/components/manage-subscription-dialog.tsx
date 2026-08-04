@@ -10,6 +10,7 @@ import {
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { LayersIcon } from "lucide-react";
 import { useState } from "react";
+import { formatDate, toDateInput } from "@/lib/date";
 import {
   type DiscountDraft,
   discountOf,
@@ -17,10 +18,10 @@ import {
   toDiscountRequest,
 } from "@/lib/discount";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { useAddMembership } from "../api";
 import {
   firstLeg,
-  formatDay,
   type MemberListItem,
   type PaymentLeg,
   type PaymentType,
@@ -52,7 +53,7 @@ const dayAfter = (iso: string): string => {
     return todayIso();
   }
 
-  return formatDay(new Date(parsed.getTime() + MS_PER_DAY).toISOString());
+  return toDateInput(new Date(parsed.getTime() + MS_PER_DAY));
 };
 
 /**
@@ -98,6 +99,7 @@ export const ManageSubscriptionDialog = ({
   onOpenChange,
   plans,
 }: ManageSubscriptionDialogProperties) => {
+  const { locale } = useLocale();
   const [planId, setPlanId] = useState(NO_PLAN);
   const [startsAt, setStartsAt] = useState(todayIso);
   const [legs, setLegs] = useState<PaymentLeg[]>(firstLeg);
@@ -202,7 +204,7 @@ export const ManageSubscriptionDialog = ({
                 </span>
                 <span className="text-muted-foreground tabular-nums">
                   {held.remainingVisits === null
-                    ? formatDay(held.endsAt)
+                    ? formatDate(held.endsAt, locale)
                     : `${held.remainingVisits} ${messages["members.visitsShort"]}`}
                 </span>
               </li>

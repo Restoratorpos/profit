@@ -1,6 +1,6 @@
 /** Mirrors what apps/backend returns from /workers. */
 
-import type { Locale } from "@/lib/i18n/config";
+import { formatDate, toDateInput } from "@/lib/date";
 import type { MessageKey } from "@/lib/i18n/dictionary";
 
 export interface WorkerListItem {
@@ -71,9 +71,29 @@ export const WORKER_POSITIONS = [
 
 export type WorkerPosition = (typeof WORKER_POSITIONS)[number];
 
-/** The message key for a position label, e.g. "workers.posTrainer". */
+/**
+ * Auth roles this screen can **show but never assign**.
+ *
+ * `role` carries two vocabularies: the auth roles the backend signs into a
+ * token, and the positions above. Owner and admin exist only in the first, so
+ * the picker cannot offer them — but the table still has to render them, or the
+ * gym's owner appears in the roster as "Boshqa", which is what happens when a
+ * label lookup falls through instead of failing.
+ */
+export const UNASSIGNABLE_ROLES = ["owner", "admin"] as const;
+
+export const isUnassignableRole = (role: string | null | undefined): boolean =>
+  UNASSIGNABLE_ROLES.some((value) => value === role);
+
+/** Everything that has a label, whether or not it can be chosen. */
+const LABELLED_ROLES: readonly string[] = [
+  ...WORKER_POSITIONS,
+  ...UNASSIGNABLE_ROLES,
+];
+
+/** The message key for a role label, e.g. "workers.posTrainer". */
 export const positionLabelKey = (position: string | null): MessageKey => {
-  const known = WORKER_POSITIONS.find((value) => value === position);
+  const known = LABELLED_ROLES.find((value) => value === position);
 
   if (!known) {
     return "workers.posOther";
@@ -99,14 +119,12 @@ export const WEEKDAYS: readonly { day: number; labelKey: MessageKey }[] = [
   { day: 7, labelKey: "plans.day7" },
 ];
 
-/** `"16h 48m"` from a minute count — the way hours read on the table. */
-export const formatHours = (minutes: number): string => {
-  const whole = Math.max(0, Math.round(minutes));
-  const hours = Math.floor(whole / 60);
-  const mins = whole % 60;
-
-  return `${hours}h ${mins}m`;
-};
+/**
+ * `"16 soat 48 daq"` from a minute count — worked time, in the reader's
+ * language. This used to print a hard-coded `"16h 48m"` here; hours are read by
+ * the same person as the dates beside them, so they come from the same table.
+ */
+export { formatDuration } from "@/lib/date";
 
 export const RANGE_PRESETS = [
   "all-time",
@@ -130,13 +148,7 @@ export type RangePreset = (typeof RANGE_PRESETS)[number];
 export const ALL_TIME_START = "2026-01-01";
 
 /** `"YYYY-MM-DD"` from a Date, local time. */
-export const toDateInput = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
+export { toDateInput } from "@/lib/date";
 
 /**
  * The [from, to] a preset selects, as "YYYY-MM-DD" bounds. `custom` returns
@@ -176,53 +188,11 @@ export const rangeForPreset = (
   return { from: toDateInput(from), to: toDateInput(to) };
 };
 
-const LOCALE_TAG: Record<Locale, string> = {
-  uz: "uz-UZ",
-  ru: "ru-RU",
-  en: "en-US",
-};
+/** `"8 iyul, 12:31"` — a compact attendance stamp. */
+export { formatStamp } from "@/lib/date";
 
-const parseDate = (value: string | null): Date | null => {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-/** `"Jul 08, 12:31"` — a compact attendance stamp. */
-export const formatStamp = (value: string | null, locale: Locale): string => {
-  const parsed = parseDate(value);
-
-  if (!parsed) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(parsed);
-};
-
-/** `"2026-06-15"` shown as a short local date, or a dash. */
-export const formatDay = (value: string | null, locale: Locale): string => {
-  const parsed = parseDate(value);
-
-  if (!parsed) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  }).format(parsed);
-};
+/** `"2026-06-15"` shown as `"15 iyun, 2026"`, or a dash. */
+export const formatDay = formatDate;
 
 /** Bare initial for the avatar stand-in. */
 export const initialOf = (name: string): string =>
@@ -343,19 +313,8 @@ export const monthOptions = (now = new Date()): string[] => {
   return months;
 };
 
-/** `"July 2026"` — how a period reads on screen. */
-export const formatMonth = (period: string, locale: Locale): string => {
-  const [year, month] = period.split("-").map(Number);
-
-  if (!(year && month)) {
-    return period;
-  }
-
-  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
-    year: "numeric",
-    month: "long",
-  }).format(new Date(year, month - 1, 1));
-};
+/** `"iyul 2026"` — how a `"2026-07"` period reads on screen. */
+export { formatMonth } from "@/lib/date";
 
 export type WorkerCounts = Record<WorkerFilter, number>;
 

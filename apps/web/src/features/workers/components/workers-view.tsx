@@ -54,7 +54,7 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { usePayday, useSetWorkerActive, useWorkersPage } from "../api";
 import {
   DEFAULT_WORKER_QUERY,
-  formatHours,
+  formatDuration,
   monthOfDate,
   positionLabelKey,
   RANGE_LABEL,
@@ -313,15 +313,17 @@ export const WorkersView = ({
           row that asked for them rather than holding space all the time. */}
       {preset === "custom" ? (
         <div className="flex flex-wrap items-center gap-2">
+          {/* Each end names itself. Both fields used to answer to "Davr", so
+              the two ends of the range had one accessible name between them. */}
           <DateField
-            aria-label={messages["workers.rangeLabel"]}
+            aria-label={messages["common.rangeFrom"]}
             className="w-full sm:w-44"
             onChange={(next) => pushRange("custom", { from: next, to })}
             value={from}
           />
           <span className="hidden text-muted-foreground sm:inline">—</span>
           <DateField
-            aria-label={messages["workers.rangeLabel"]}
+            aria-label={messages["common.rangeTo"]}
             className="w-full sm:w-44"
             onChange={(next) => pushRange("custom", { from, to: next })}
             value={to}
@@ -409,7 +411,7 @@ export const WorkersView = ({
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground tabular-nums">
-                      {formatHours(worker.minutesWorked)}
+                      {formatDuration(worker.minutesWorked, locale)}
                     </TableCell>
                     <MoneyCell value={worker.earned} />
                     <MoneyCell value={worker.paid} />
@@ -571,6 +573,10 @@ export const WorkersView = ({
             setDetail(null);
           }
         }}
+        /* The range the table is showing is only where the panel starts; it
+           owns its own from there, and changing it there does not move this
+           list. */
+        preset={preset}
         summary={detail}
         to={to}
       />

@@ -91,10 +91,18 @@ export interface FormState {
   workerId: string | null;
 }
 
+/*
+ * The screen opens on the expense tab, so `expenseCategory` is what it opens on
+ * full stop — and it is `supplier` (Tovar xaridi) rather than `salary` for two
+ * reasons. It is what the desk actually types most of: goods bought in, several
+ * times a shift, against a wage run once a month. And a salary needs a worker
+ * attached before it can be saved, so opening on it meant opening on a form that
+ * refused to submit until a second field was answered.
+ */
 export const initialForm = (): FormState => ({
   amount: "",
   cashbox: "cash",
-  expenseCategory: "salary",
+  expenseCategory: "supplier",
   incomeCategory: "membership",
   memberId: null,
   memberLabel: "",

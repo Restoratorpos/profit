@@ -868,19 +868,45 @@ export const createWorker = async (
   return toWorkerItem(worker, 0, null, false, 0, currentMonthRange());
 };
 
+/**
+ * Roles the staff screen can show but must never write.
+ *
+ * `workers.role` serves two vocabularies at once: the **auth** roles
+ * (`WORKER_ROLES` — owner, admin, manager, trainer, receptionist) and the
+ * **positions** this screen offers (`WORKER_POSITIONS` — manager, trainer,
+ * receptionist, cleaner, guard, other). They overlap in the middle and diverge
+ * at both ends, and owner is the end that matters: it is the only role that can
+ * rename the gym or reach the settings screen.
+ *
+ * A save from the staff sheet sends a *position*. Applied to an owner it wrote
+ * `trainer` over `owner`, and since the picker has no owner row there was then
+ * no way back through the UI — the gym's only owner was demoted by somebody
+ * editing their own phone number, with nothing to say it had happened.
+ */
+const UNASSIGNABLE_ROLES: readonly string[] = ["owner", "admin"];
+
 export const updateWorker = async (
   gymId: string,
   workerId: string,
   input: UpdateWorkerInput
 ): Promise<void> => {
-  await findWorker(gymId, workerId);
+  const current = await findWorker(gymId, workerId);
+
+  /*
+   * Ignored rather than rejected. The sheet saves the whole form, so refusing
+   * the request would block a legitimate edit to a salary or a shift because of
+   * a field the operator was never offered a way to change.
+   */
+  const role = UNASSIGNABLE_ROLES.includes(current.role ?? "")
+    ? undefined
+    : input.role;
 
   await db
     .update(workers)
     .set({
       ...(input.fullname === undefined ? {} : { fullname: input.fullname }),
       ...(input.phone === undefined ? {} : { phone: input.phone }),
-      ...(input.role === undefined ? {} : { role: input.role }),
+      ...(role === undefined ? {} : { role }),
       ...(input.salaryType === undefined
         ? {}
         : { salaryType: input.salaryType }),

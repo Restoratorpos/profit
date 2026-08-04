@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import {
   type DeviceView,
   directionLabel,
@@ -69,6 +70,7 @@ export const DeviceCard = ({
   onSync,
   onTest,
 }: DeviceCardProperties) => {
+  const { locale } = useLocale();
   const online = isOnline(device);
 
   return (
@@ -107,7 +109,8 @@ export const DeviceCard = ({
             {" · "}
             {messages["devices.enrolled"]}: {device.enrolledCount}
             {" · "}
-            {messages["devices.lastSeen"]}: {formatWhen(device.lastSeen)}
+            {messages["devices.lastSeen"]}:{" "}
+            {formatWhen(device.lastSeen, locale)}
           </p>
         </div>
 

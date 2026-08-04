@@ -58,6 +58,7 @@ export const NewOrderPage = () => {
       id: member.id,
       name: member.name,
       phone: member.phone,
+      code: member.uniqueId,
     })
   );
 

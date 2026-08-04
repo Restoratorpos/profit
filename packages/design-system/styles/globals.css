@@ -441,8 +441,21 @@
   }
 } */
 
-* {
-  border-color: var(--border);
+/* The default border colour, so a bare `border` is the theme's rule rather than
+   v4's `currentColor`.
+
+   It MUST stay inside `@layer base`. Unlayered, it beat every `border-*` colour
+   utility in the app — utilities are emitted into `@layer utilities`, and an
+   unlayered rule wins over a layered one outright, with specificity never
+   entering into it. Nothing looked broken: a `*` selector is as weak as a
+   selector gets, so the classes read as if they must be working, and the only
+   symptom was that no border ever took a colour. `border-l-primary` on the
+   orders rows and `border-primary/50` in SELECTED_TINT were both silently
+   dead. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 /* Force light color-scheme to prevent browser canvas color mismatch

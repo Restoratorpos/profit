@@ -21,6 +21,7 @@ import { CreatableCombobox } from "@/components/creatable-combobox";
 import type { MemberListItem } from "@/features/members/types";
 import type { WorkerListItem } from "@/features/workers/types";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { prepareFacePhoto } from "@/lib/images";
 import { useEnrollPerson, useRevokePerson } from "../api";
 import { type DeviceView, type EnrolledPerson, formatWhen } from "../types";
@@ -55,6 +56,7 @@ export const EnrollSheet = ({
   onOpenChange,
   workers,
 }: EnrollSheetProperties) => {
+  const { locale } = useLocale();
   const [personType, setPersonType] = useState<PersonType>("worker");
   const [personId, setPersonId] = useState<string | null>(null);
   const [photoName, setPhotoName] = useState<string | null>(null);
@@ -254,7 +256,7 @@ export const EnrollSheet = ({
                         ? messages["devices.typeMember"]
                         : messages["devices.typeWorker"]}
                       {" · "}
-                      {formatWhen(person.issuedAt)}
+                      {formatWhen(person.issuedAt, locale)}
                     </p>
                   </div>
                   <Button

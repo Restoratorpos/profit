@@ -7,7 +7,7 @@ import {
   PackageIcon,
 } from "lucide-react";
 import type { Messages } from "@/lib/i18n/dictionary";
-import type { StockCounts, StockStatus } from "../types";
+import type { StockCounts, StockFilter } from "../types";
 
 /**
  * The four counts above the table. They are the question the desk asks before
@@ -22,7 +22,7 @@ import type { StockCounts, StockStatus } from "../types";
 interface Tile {
   accent: string;
   icon: typeof PackageIcon;
-  key: StockStatus | "total";
+  key: StockFilter;
   labelKey:
     | "inventory.statTotal"
     | "inventory.statInStock"
@@ -35,8 +35,8 @@ interface StatTilesProperties {
   counts: StockCounts;
   messages: Messages;
   /** Highlights the tile whose products the table is filtered down to. */
-  onSelect: (status: StockStatus | "total") => void;
-  selected: StockStatus | "total";
+  onSelect: (status: StockFilter) => void;
+  selected: StockFilter;
 }
 
 export const StatTiles = ({

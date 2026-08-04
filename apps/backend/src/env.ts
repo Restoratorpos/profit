@@ -60,8 +60,14 @@ const envSchema = z.object({
   DEVICE_SECRET: z.string().min(16).optional(),
 
   // Where the terminals should POST their events — the address *they* can reach
-  // this server on, which is a LAN address and therefore not derivable from any
-  // request the browser makes. Only used to configure the device.
+  // this server on. Only used to configure the device.
+  //
+  // Leave it unset. It is derived per terminal from the route this machine
+  // would take to reach that terminal (see lib/lan-address.ts), which is both
+  // the right network card and immune to the lease moving. Set it only to
+  // override a network where that answer is wrong — a NAT or a second subnet
+  // between the desk and the door. A value here is used verbatim and never
+  // re-checked, so a stale one silently ends attendance.
   DEVICE_CALLBACK_HOST: z.string().optional(),
   DEVICE_CALLBACK_PORT: z.coerce.number().int().positive().optional(),
   /**

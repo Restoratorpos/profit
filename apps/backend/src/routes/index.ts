@@ -5,6 +5,7 @@ import { categoryRoutes, productRoutes } from "./catalog.js";
 import { comboRoutes } from "./combo.js";
 import { dashboardRoutes } from "./dashboard.js";
 import { attendanceRoutes, deviceRoutes } from "./device.js";
+import { gymRoutes } from "./gym.js";
 import { healthRoutes } from "./health.js";
 import { inventoryRoutes, supplierRoutes } from "./inventory.js";
 import { memberRoutes } from "./member.js";
@@ -16,6 +17,7 @@ import { workerRoutes } from "./worker.js";
 export const routes = new Hono<AppEnv>()
   .route("/health", healthRoutes)
   .route("/auth", authRoutes)
+  .route("/gym", gymRoutes)
   .route("/dashboard", dashboardRoutes)
   .route("/categories", categoryRoutes)
   .route("/products", productRoutes)

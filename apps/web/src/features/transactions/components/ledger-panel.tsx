@@ -9,6 +9,7 @@ import {
 } from "@repo/design-system/components/ui/empty";
 import { cn } from "@repo/design-system/lib/utils";
 import { ClipboardListIcon, Undo2Icon } from "lucide-react";
+import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 import {
   ACTIVE_FILL_DANGER,
@@ -37,11 +38,13 @@ const isKnownCashbox = (value: string | null): value is Cashbox =>
 
 const LedgerRow = ({
   disabled,
+  locale,
   messages,
   onVoid,
   row,
 }: {
   disabled: boolean;
+  locale: Locale;
   messages: Messages;
   onVoid: (id: string) => void;
   row: TransactionRow;
@@ -66,7 +69,7 @@ const LedgerRow = ({
       />
 
       <span className="w-12 shrink-0 text-muted-foreground text-xs tabular-nums">
-        {formatTime(row.occurredAt)}
+        {formatTime(row.occurredAt, locale)}
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -124,6 +127,7 @@ const LedgerRow = ({
 interface LedgerPanelProperties {
   disabled: boolean;
   filter: LedgerFilter;
+  locale: Locale;
   messages: Messages;
   onFilter: (filter: LedgerFilter) => void;
   onVoid: (id: string) => void;
@@ -133,6 +137,7 @@ interface LedgerPanelProperties {
 export const LedgerPanel = ({
   disabled,
   filter,
+  locale,
   messages,
   onFilter,
   onVoid,
@@ -193,6 +198,7 @@ export const LedgerPanel = ({
             <LedgerRow
               disabled={disabled}
               key={row.id}
+              locale={locale}
               messages={messages}
               onVoid={onVoid}
               row={row}

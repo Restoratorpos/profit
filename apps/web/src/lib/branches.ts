@@ -1,26 +1,14 @@
-export interface BranchOption {
-  id: string;
-  name: string;
-}
-
-/** Device-scoped: a terminal lives in one branch. */
-export const BRANCH_COOKIE = "profit-branch";
-
 /**
- * PLACEHOLDER — not real data.
+ * Which branch this terminal is pointed at.
  *
- * The real list is `SELECT branch_id, branch FROM branches WHERE gym_id = ?`,
- * which needs the caller's `gym_id`. The backend already puts `gymId` on its
- * own access token, but the **web session does not carry it**: widening
- * `/auth/verify` means editing `packages/auth/lib/verify-credentials.ts`, and
- * the `Read(./**\/*credential*)` deny rule in `.claude/settings.json` currently
- * blocks that file.
+ * Device-scoped, like the sidebar and locale: a POS terminal sits in one
+ * branch, so the machine remembers it rather than making whoever is on shift
+ * pick it again.
  *
- * So this stays a stub until either that glob is narrowed, or the app gets a
- * `/api/branches` route that calls the backend server-side. Everything else
- * about the switcher — the cookie, the selection, the re-render — is real and
- * will not change when the data does.
+ * The list itself is real — it arrives with `GET /gym` — but **nothing is
+ * scoped by it yet.** Every backend query filters by `gym_id` alone, so the
+ * choice is remembered and displayed and changes no data. Wiring it up means
+ * sending the branch on the feature queries and filtering there; until then,
+ * treat a switch as a statement of intent rather than a filter.
  */
-export const PLACEHOLDER_BRANCHES: readonly BranchOption[] = [
-  { id: "placeholder-main", name: "Main" },
-] as const;
+export const BRANCH_COOKIE = "profit-branch";

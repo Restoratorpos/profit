@@ -26,7 +26,10 @@ export const config = {
   devices: {
     /** Encrypts terminal passwords at rest. Absent means none may be saved. */
     secret: env.DEVICE_SECRET,
-    /** The address a terminal on the LAN can reach this server on. */
+    /**
+     * Overrides the address a terminal on the LAN can reach this server on.
+     * Normally unset — it is derived per device in `enablePush`.
+     */
     callbackHost: env.DEVICE_CALLBACK_HOST,
     callbackPort: env.DEVICE_CALLBACK_PORT ?? env.PORT,
     /** Whose terminals to re-point at boot; unset means "do not". */

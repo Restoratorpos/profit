@@ -50,6 +50,19 @@ export const registerRequestSchema = registerSchema.extend({
 });
 
 /**
+ * Changing your own password, from the settings screen.
+ *
+ * The current one is required rather than trusted from the bearer token: an
+ * access token left live on an unattended terminal should not be enough to take
+ * the account over. The bounds match `credentialsSchema` — bcrypt truncates past
+ * 72 bytes, so a longer new password would silently not be the one that was set.
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password").max(72),
+  newPassword: z.string().min(4).max(72),
+});
+
+/**
  * Optional because a browser sends the token as a cookie rather than in the
  * body. The route requires one or the other and 400s when neither is present.
  */

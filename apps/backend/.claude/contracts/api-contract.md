@@ -65,6 +65,13 @@ are never leaked to the client.
 | `POST /auth/logout` | Revoke a refresh token | `204`, always |
 | `POST /auth/verify` | **Web login.** Server-to-server credential check | `200 { id, phone, name, role, gymId, branchId }` |
 | `GET /auth/me` | Current user, behind `requireAuth` | `200 { user }` |
+| `PATCH /auth/password` | Change **your own** password, behind `requireAuth` | `204` |
+
+`PATCH /auth/password` re-checks the current password against the stored hash
+rather than trusting the bearer token, and answers a wrong one with **403, not
+401** — the SPA reads 401 as "this access token expired", so it would refresh,
+rotate the session's refresh token and replay the same doomed request before
+showing the message.
 
 `POST /auth/login` is throttled per phone number — **429** with
 `details.retryAfter` in seconds once the window is exhausted. The counter is
@@ -171,6 +178,22 @@ Under a bearer token `x-gym-id` is **never read**. That is the whole point: the
 service door lets whoever holds `SERVICE_TOKEN` name any gym, and the bearer
 door cannot. `__tests__/caller-auth.test.ts` asserts it; if that test ever fails,
 one gym can read another's data by editing a request.
+
+### The exception: `/gym`
+
+The settings routers mount **`requireAuth`**, not `requireCaller`:
+
+| Route | Purpose | Success |
+| --- | --- | --- |
+| `GET /gym` | The tenant's name, plan and opening hours | `200 GymSettingsView` |
+| `PATCH /gym` | Rename it or set its hours — `requireRole("owner", "admin")` | `200 GymSettingsView` |
+
+The service door takes its tenant from a client-supplied header, and "which gym
+am I renaming" is precisely the question that must not be answerable that way.
+Reading is open to any signed-in worker because the shell puts the gym's name in
+the header of every screen. Hours live on `branches`, so the service resolves the
+caller's branch (falling back to the gym's oldest — an owner has no `branchId`).
+`__tests__/gym-settings.test.ts` covers the matrix.
 
 `requireService` is being retired. Once `apps/app` is gone (Phase 5 of
 `MIGRATION-VITE.md`) the routes go back to plain `requireAuth`, and

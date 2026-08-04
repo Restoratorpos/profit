@@ -106,6 +106,40 @@ describe("sidebar", () => {
   });
 });
 
+/**
+ * A dialog footer has to be able to wrap.
+ *
+ * Buttons are `shrink-0` and `whitespace-nowrap` on purpose — a touch target
+ * that shrinks under a long label stops being one — so a footer laid out as a
+ * single non-wrapping row has nowhere to put an action that does not fit and
+ * pushes it out through the side of the card. Three buttons and a translated
+ * label is enough: the face dialog's footer measured about 550px inside a 448px
+ * dialog, and the overflow was drawn floating past the edge.
+ *
+ * Nothing catches it — the classes are valid, every build passes, and it only
+ * appears in the language with the longest words.
+ */
+describe("dialog footers", () => {
+  const ui = join(process.cwd(), "../../packages/design-system/components/ui");
+
+  it.each([
+    "dialog.tsx",
+    "alert-dialog.tsx",
+  ])("%s wraps rather than overflowing", (file) => {
+    const source = readFileSync(join(ui, file), "utf8");
+
+    expect(source).toContain("flex flex-col-reverse flex-wrap");
+  });
+
+  it("follows the card's rounded corners where it bleeds to the edge", () => {
+    // The -mx/-mb bleed paints the bar over the corners the content rounds.
+    const source = readFileSync(join(ui, "dialog.tsx"), "utf8");
+
+    expect(source).toContain("-mx-4 -mb-4");
+    expect(source).toContain("rounded-b-lg");
+  });
+});
+
 describe("pages", () => {
   it("finds page components to check", () => {
     expect(pageComponents.length).toBeGreaterThan(10);

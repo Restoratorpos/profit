@@ -41,7 +41,14 @@ export interface WorkerInput {
   fullname: string;
   hiredAt: string | null;
   phone: string;
-  role: string;
+  /**
+   * Absent when the worker holds an auth role the position picker cannot
+   * express — an owner or an admin. The backend refuses that write anyway;
+   * omitting it means the save carries no opinion about their role rather than
+   * one that has to be discarded. Required on create, where the sheet always
+   * picks one.
+   */
+  role?: string;
   salaryAmount: string;
   salaryType: string;
   shiftEnd: string | null;
@@ -92,7 +99,13 @@ export const workersPageQuery = (query: WorkerQuery, bounds: RangeBounds) =>
 export const useWorkersPage = (query: WorkerQuery, bounds: RangeBounds) =>
   useQuery(workersPageQuery(query, bounds));
 
-/** One worker's profile and attendance over the range the list is showing. */
+/**
+ * One worker's profile and attendance over a range.
+ *
+ * `keepPreviousData` for the same reason the table has it, now that the detail
+ * panel picks its own range: every preset change is a new key, and without it
+ * the panel emptied to a spinner between one answer and the next.
+ */
 export const useWorkerDetail = (workerId: string | null, bounds: RangeBounds) =>
   useQuery({
     queryKey: workerKeys.detail(workerId ?? "", bounds),
@@ -101,6 +114,7 @@ export const useWorkerDetail = (workerId: string | null, bounds: RangeBounds) =>
         `/workers/${workerId}?${new URLSearchParams({ from: bounds.from, to: bounds.to }).toString()}`
       ),
     enabled: workerId !== null,
+    placeholderData: keepPreviousData,
   });
 
 /**

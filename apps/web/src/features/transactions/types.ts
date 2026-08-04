@@ -1,3 +1,10 @@
+import {
+  formatTime as formatClock,
+  formatDay,
+  NO_DATE,
+  toDate,
+} from "@/lib/date";
+import type { Locale } from "@/lib/i18n/config";
 import type { MessageKey } from "@/lib/i18n/dictionary";
 
 /**
@@ -30,11 +37,16 @@ export const CASHBOX_ICON: Record<Cashbox, "banknote" | "card" | "bank"> = {
   transfer: "bank",
 };
 
+/*
+ * `owner_deposit` is gone from what the desk can pick — see the same list in
+ * apps/backend's `schemas/transaction.ts`. It stays in `CATEGORY_LABEL` below,
+ * because rows written before it was withdrawn still have to render as a name
+ * rather than a raw key.
+ */
 export const INCOME_CATEGORIES = [
   "membership",
   "goods",
   "hall_rent",
-  "owner_deposit",
   "other",
 ] as const;
 
@@ -58,10 +70,11 @@ export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 export const TRANSFER_CATEGORY = "cash_move";
 
 /**
- * Every category the ledger can show, including the two this screen never
- * writes: `order` comes from a checkout on /orders and `sup_return` from a
- * supplier credit on /inventory. A row from elsewhere still has to render with a
- * name rather than a key.
+ * Every category the ledger can show, including the ones this screen never
+ * writes: `order` comes from a checkout on /orders, `sup_return` from a supplier
+ * credit on /inventory, and `owner_deposit` from before it was withdrawn from
+ * the picker. A row from elsewhere — or from earlier — still has to render with
+ * a name rather than a key.
  */
 export const CATEGORY_LABEL: Record<string, MessageKey> = {
   cash_move: "tx.catTransfer",
@@ -200,16 +213,15 @@ export const formatBalance = (value: string): string => {
   return GROUP_FORMAT.format(Number.isFinite(amount) ? amount : 0);
 };
 
-/** Ledger rows show the clock, not the date — the list is today's work. */
-export const formatTime = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
+/**
+ * Ledger rows show the clock, not the date — the list is today's work. A row
+ * from another day says which day, in words: `"31 iyul 18:03"`.
+ */
+export const formatTime = (value: string | null, locale: Locale): string => {
+  const parsed = toDate(value);
 
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "—";
+  if (!parsed) {
+    return NO_DATE;
   }
 
   const now = new Date();
@@ -218,15 +230,7 @@ export const formatTime = (value: string | null): string => {
     parsed.getMonth() === now.getMonth() &&
     parsed.getDate() === now.getDate();
 
-  const time = `${String(parsed.getHours()).padStart(2, "0")}:${String(
-    parsed.getMinutes()
-  ).padStart(2, "0")}`;
+  const time = formatClock(parsed);
 
-  if (isToday) {
-    return time;
-  }
-
-  return `${String(parsed.getDate()).padStart(2, "0")}.${String(
-    parsed.getMonth() + 1
-  ).padStart(2, "0")} ${time}`;
+  return isToday ? time : `${formatDay(parsed, locale)} ${time}`;
 };

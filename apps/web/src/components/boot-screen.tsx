@@ -9,7 +9,7 @@ import {
 } from "@repo/design-system/components/ui/empty";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { Link } from "@tanstack/react-router";
-import { FileQuestionIcon } from "lucide-react";
+import { FileQuestionIcon, WifiOffIcon } from "lucide-react";
 
 /**
  * Shown while the boot session check is in flight.
@@ -28,6 +28,41 @@ export const BootScreen = () => (
       wordmarkClassName="text-2xl"
     />
     <Spinner />
+  </div>
+);
+
+/**
+ * Shown when the boot check could not reach the API at all.
+ *
+ * Deliberately not the sign-in screen. Whether there is a session is *unknown*
+ * here, and guessing "signed out" is what used to throw operators back to a
+ * login form mid-shift over one dropped request — a form which, needing the same
+ * unreachable server, could not have signed them in anyway. Saying so and
+ * offering the retry is both more honest and more useful.
+ */
+export const OfflineScreen = ({ onRetry }: { onRetry: () => void }) => (
+  <div
+    className="flex min-h-svh flex-col items-center justify-center gap-4 p-6 text-center"
+    role="alert"
+  >
+    <Logo
+      accentClassName="text-primary-accent"
+      markClassName="size-10 text-primary"
+      wordmarkClassName="text-2xl"
+    />
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <WifiOffIcon />
+        </EmptyMedia>
+        <EmptyTitle>Serverga ulanib bo'lmadi</EmptyTitle>
+        <EmptyDescription>
+          Aloqa tiklangach, siz shu yerdan davom etasiz — qaytadan kirish shart
+          emas.
+        </EmptyDescription>
+      </EmptyHeader>
+      <Button onClick={onRetry}>Qayta urinish</Button>
+    </Empty>
   </div>
 );
 

@@ -41,7 +41,7 @@ import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { usePayWorker, useWorkerPayroll } from "../api";
 import {
-  formatHours,
+  formatDuration,
   formatMonth,
   formatStamp,
   initialOf,
@@ -144,7 +144,7 @@ const PayrollSummary = ({
     <>
       <SummaryRow
         label={messages["workers.colHours"]}
-        value={formatHours(payroll.minutesWorked)}
+        value={formatDuration(payroll.minutesWorked, locale)}
       />
 
       {/* A monthly salary is the whole month's from its first day — true, and
@@ -295,7 +295,12 @@ export const PayWorkerDialog = ({
             <WalletIcon className="size-5" />
             {messages["workers.payTitle"]}
           </DialogTitle>
-          <DialogDescription>{formatMonth(period, locale)}</DialogDescription>
+          {/* The month is the first thing the form asks for and shows back, so
+              printing it under the title again said the same word twice.
+              Kept for the dialog's accessible description, not for the eye. */}
+          <DialogDescription className="sr-only">
+            {formatMonth(period, locale)}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 md:grid-cols-2">

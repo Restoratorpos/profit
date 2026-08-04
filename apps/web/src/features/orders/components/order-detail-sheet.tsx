@@ -78,11 +78,9 @@ const ItemRow = ({ item }: { item: MemberOrderView["items"][number] }) => (
 
 /** One order card: its time, a per-order remaining hint, and its line items. */
 const OrderCard = ({
-  locale,
   messages,
   order,
 }: {
-  locale: Locale;
   messages: Messages;
   order: MemberOrderView;
 }) => {
@@ -92,7 +90,7 @@ const OrderCard = ({
     <div className="rounded-xl border p-3">
       <div className="mb-2.5 flex items-center justify-between gap-2 border-b pb-2.5">
         <span className="text-muted-foreground text-sm">
-          {formatTime(order.createdAt, locale)}
+          {formatTime(order.createdAt)}
         </span>
         {partlyPaid ? (
           <span className="font-medium text-destructive text-xs">
@@ -412,12 +410,7 @@ const DetailBody = ({
                   {day.label}
                 </p>
                 {day.orders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    locale={locale}
-                    messages={messages}
-                    order={order}
-                  />
+                  <OrderCard key={order.id} messages={messages} order={order} />
                 ))}
               </div>
             ))}

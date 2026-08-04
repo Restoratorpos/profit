@@ -12,7 +12,8 @@ import {
  *
  * Every figure on that table — hours, earned, paid, balance — is computed over
  * the range rather than being a standing total, so which range the page opens
- * on decides what "Qoldiq" means. It opens on the whole of the books.
+ * on decides what "Qoldiq" means. It opens on **this month**, because wages are
+ * settled by the month and the pay window books a payment against one.
  */
 
 const NOW = new Date(2026, 6, 29);
@@ -43,13 +44,13 @@ describe("the staff route", () => {
     "utf8"
   );
 
-  it("opens on the whole range, not the current month", () => {
+  it("opens on the current month, the one a wage is settled against", () => {
     /*
      * Asserted against the source because the fallback is a `.catch()` on the
      * search schema — it only shows up on a request with no `range=`, which is
      * every first visit and no test that passes one.
      */
-    expect(source).toContain('.catch("all-time")');
+    expect(source).toContain('.catch("this-month")');
   });
 });
 

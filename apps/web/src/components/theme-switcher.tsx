@@ -35,8 +35,8 @@ export const ThemeSwitcher = ({ messages }: ThemeSwitcherProperties) => {
   // The label names where the press takes you, which is what a screen reader
   // needs from a button — the chips carry where you already are.
   const nextLabel = isDark
-    ? messages["topbar.theme.light"]
-    : messages["topbar.theme.dark"];
+    ? messages["settings.themeLight"]
+    : messages["settings.themeDark"];
 
   return (
     <Button

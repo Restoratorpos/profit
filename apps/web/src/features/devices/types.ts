@@ -87,22 +87,8 @@ export const isOnline = (device: DeviceView, now = Date.now()): boolean => {
   return Number.isFinite(seen) && now - seen < ONLINE_WINDOW_MS;
 };
 
-const DATE_TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  month: "short",
-});
-
-export const formatWhen = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? "—" : DATE_TIME_FORMAT.format(parsed);
-};
+/** `"3 avgust, 08:12"` — when a terminal was last heard from. */
+export { formatStamp as formatWhen } from "@/lib/date";
 
 /*
  * Reading a picked photo lives in lib/images.ts — see `prepareFacePhoto`, which

@@ -1,5 +1,6 @@
 /** Mirrors what apps/backend returns from /members. */
 
+import { toDate, toDateInput } from "@/lib/date";
 import { endsChain, legTakes, type PaymentLeg } from "@/lib/payment-legs";
 
 export {
@@ -192,6 +193,38 @@ export const DEFAULT_MEMBER_QUERY: MemberQuery = {
   query: "",
 };
 
+/**
+ * The part of the query another screen can hand over in a URL.
+ *
+ * Only the three fields that mean something to a caller — a term to look for
+ * and the two filters. Paging is deliberately absent: a link that lands on page
+ * four of somebody else's result set is a link that breaks the moment a member
+ * is added.
+ */
+export interface MemberSearch {
+  debt?: DebtFilter;
+  filter?: MemberFilter;
+  q?: string;
+}
+
+/**
+ * The URL, widened back into what the list actually asks the backend for.
+ *
+ * Every field is absent-able, so an omitted one falls back to what the screen
+ * opens on by itself — which is what lets `/members` and `/members?filter=all`
+ * be the same screen rather than two.
+ *
+ * Shared by the route loader and the page so the query warmed during navigation
+ * is keyed identically to the one the page then subscribes to. Deriving it
+ * twice by hand is how a deep link ends up fetching the same page twice.
+ */
+export const memberQueryFrom = (search: MemberSearch): MemberQuery => ({
+  ...DEFAULT_MEMBER_QUERY,
+  debt: search.debt ?? DEFAULT_MEMBER_QUERY.debt,
+  filter: search.filter ?? DEFAULT_MEMBER_QUERY.filter,
+  query: search.q ?? DEFAULT_MEMBER_QUERY.query,
+});
+
 export interface MemberCounts {
   debt: { any: number; membership: number; shop: number };
   status: { active: number; all: number; expiring: number; inactive: number };
@@ -212,27 +245,22 @@ export interface MemberPage {
 /** A debt column shows a dash rather than "0", which reads as a real figure. */
 export const hasDebt = (value: string): boolean => Number(value) > 0;
 
-/** Dates come back ISO; only the day is ever shown. */
-export const formatDay = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
+/**
+ * `"YYYY-MM-DD"` in local time, or `""` for nothing — a **value**, not a label.
+ *
+ * This is what a date input holds and what the CSV export writes, so it stays
+ * machine-shaped. Anything a person reads goes through `formatDate` from
+ * `@/lib/date` instead ("8 mart, 2026"); this used to be both, and the tables
+ * showed ISO strings to the desk as a result.
+ */
+export const isoDay = (value: string | null): string => {
+  const parsed = toDate(value);
 
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "—";
-  }
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return parsed ? toDateInput(parsed) : "";
 };
 
 /** Today as "YYYY-MM-DD" in local time — the default membership start. */
-export const todayIso = (): string => formatDay(new Date().toISOString());
+export const todayIso = (): string => toDateInput(new Date());
 
 export const initialOf = (name: string): string =>
   name.trim().charAt(0).toUpperCase() || "?";

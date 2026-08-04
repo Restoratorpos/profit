@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { refreshSession } from "../src/lib/api/client";
+import { restoreSession } from "../src/lib/auth/api";
 import { getAccessToken, setAccessToken } from "../src/lib/auth/tokens";
 
 /**
@@ -91,6 +92,65 @@ describe("a refresh that never completes", () => {
     await refreshSession();
 
     expect(getAccessToken()).toBe("a-live-access-token");
+  });
+});
+
+/**
+ * The boot check is the *only* thing that decides whether a reload lands the
+ * operator back in the app or at the sign-in screen — the access token lives in
+ * memory and does not survive a reload. So its answer has to be a verdict, not
+ * whatever the first request happened to do.
+ */
+describe("the boot session restore", () => {
+  const session = {
+    accessToken: "a-fresh-access-token",
+    user: {
+      id: "wkr_1",
+      phone: "998907661770",
+      name: "Owner",
+      role: "owner",
+      gymId: "gym_1",
+      branchId: "brn_1",
+    },
+  };
+
+  it("takes a rejection at face value and does not retry it", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(jsonResponse({ error: {} }, 401))
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(restoreSession()).resolves.toEqual({ status: "signed-out" });
+    // Nothing to retry: the server read the cookie and said no.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again when the request goes unanswered", async () => {
+    const fetchMock = vi.fn(() => Promise.reject(new TypeError("failed")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(restoreSession()).resolves.toEqual({ status: "offline" });
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("recovers when a retry gets through", async () => {
+    let attempts = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        attempts += 1;
+
+        return attempts === 1
+          ? Promise.reject(new TypeError("failed"))
+          : Promise.resolve(jsonResponse(session, 200));
+      })
+    );
+
+    await expect(restoreSession()).resolves.toEqual({
+      status: "session",
+      session,
+    });
   });
 });
 

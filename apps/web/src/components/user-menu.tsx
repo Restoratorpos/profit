@@ -15,7 +15,12 @@ import {
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOutIcon, ScanFaceIcon } from "lucide-react";
+import {
+  LogOutIcon,
+  ScanFaceIcon,
+  SettingsIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import type { Messages } from "@/lib/i18n/dictionary";
 
@@ -23,24 +28,12 @@ interface UserMenuProperties {
   messages: Messages;
 }
 
-const WHITESPACE = /\s+/;
-
-/** First letters of up to two words — "Ali Valiyev" -> "AV". */
-const initialsOf = (name: string): string =>
-  name
-    .split(WHITESPACE)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-
 export const UserMenu = ({ messages }: UserMenuProperties) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
   const name = user?.name ?? "";
   const phone = formatPhone(user?.phone);
-  const initials = initialsOf(name);
 
   const signOutMutation = useMutation({
     mutationFn: signOut,
@@ -52,22 +45,27 @@ export const UserMenu = ({ messages }: UserMenuProperties) => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {/*
-         * On a phone the name and number drop away and the avatar is the whole
-         * control — they are repeated at the top of the menu, so nothing is
-         * lost by not spending a third of a 320px header on them.
+         * A person mark and the name — no initials and no phone number. The
+         * initials were a two-letter puzzle for something the name says
+         * outright, and the number is an account detail that belongs in the menu
+         * and on the settings screen rather than in the header all day.
          */}
         <Button
           aria-label={messages["topbar.account"]}
-          className="h-auto gap-2 rounded-full py-1 pr-1 pl-2 font-normal sm:pl-3"
+          className="h-auto gap-2 rounded-full py-0.5 pr-0.5 pl-3 font-normal"
           variant="ghost"
         >
-          <span className="hidden text-right leading-tight sm:block">
-            <span className="block font-medium text-sm">{name}</span>
-            <span className="block text-muted-foreground text-xs">{phone}</span>
+          {/* Name first, mark last — it reads inward from the edge of the
+              screen, and it puts the mark against the corner rather than a word
+              that changes length with whoever is on shift. Truncates rather
+              than wraps: a long name must not push the control off a narrow
+              header. */}
+          <span className="max-w-[8rem] truncate font-medium text-sm sm:max-w-[12rem]">
+            {name}
           </span>
-          <Avatar className="size-8 ring-2 ring-primary/25">
-            <AvatarFallback className="bg-primary/15 font-semibold text-primary-accent text-xs">
-              {initials}
+          <Avatar className="size-7 ring-2 ring-primary/25">
+            <AvatarFallback className="bg-primary/15 text-primary-accent">
+              <UserRoundIcon className="size-3.5" />
             </AvatarFallback>
           </Avatar>
         </Button>
@@ -80,8 +78,8 @@ export const UserMenu = ({ messages }: UserMenuProperties) => {
          */}
         <div className="flex items-center gap-3 p-2">
           <Avatar className="size-10">
-            <AvatarFallback className="bg-primary/15 font-semibold text-primary-accent text-sm">
-              {initials}
+            <AvatarFallback className="bg-primary/15 text-primary-accent">
+              <UserRoundIcon className="size-5" />
             </AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-col leading-tight">
@@ -105,6 +103,18 @@ export const UserMenu = ({ messages }: UserMenuProperties) => {
             <Link to="/devices">
               <ScanFaceIcon className="size-4" />
               <span>{messages["nav.devices"]}</span>
+            </Link>
+          </DropdownMenuItem>
+
+          {/*
+           * Settings sits with the terminals for the same reason: it is where
+           * this machine's language and theme live alongside the gym's name and
+           * opening hours, all of them set once rather than during a shift.
+           */}
+          <DropdownMenuItem asChild className="gap-2">
+            <Link to="/settings">
+              <SettingsIcon className="size-4" />
+              <span>{messages["nav.settings"]}</span>
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>

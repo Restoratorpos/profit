@@ -2,6 +2,14 @@
 
 import { formatPhone } from "@repo/auth/lib/countries";
 import type { AttendanceEventView } from "@/features/devices/types";
+import {
+  formatDay,
+  formatTime,
+  NO_DATE,
+  toDate,
+  toDateInput,
+} from "@/lib/date";
+import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 
 export const DENIAL_REASONS = [
@@ -103,38 +111,22 @@ export const reasonMessage = (
   }
 };
 
-const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-const DAY_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-});
-
-/** `"26 July 12:14"` — the day and the clock, which is what a desk reads. */
+/** `"26 iyul" / "12:14"` — the day and the clock, which is what a desk reads. */
 export const formatEntry = (
-  value: string | null
+  value: string | null,
+  locale: Locale
 ): { day: string; time: string } => {
-  if (!value) {
-    return { day: "—", time: "" };
+  const parsed = toDate(value);
+
+  if (!parsed) {
+    return { day: NO_DATE, time: "" };
   }
 
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return { day: "—", time: "" };
-  }
-
-  return { day: DAY_FORMAT.format(parsed), time: TIME_FORMAT.format(parsed) };
+  return { day: formatDay(parsed, locale), time: formatTime(parsed) };
 };
 
 /** `"YYYY-MM-DD"` in local time — what the date inputs exchange. */
-export const toDateInput = (date: Date): string =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate()
-  ).padStart(2, "0")}`;
+export { toDateInput } from "@/lib/date";
 
 /** The instant a day starts and ends locally, for an inclusive range. */
 export const dayStart = (value: string): Date => new Date(`${value}T00:00:00`);
@@ -171,7 +163,8 @@ const csvCell = (value: string): string => `"${value.replace(/"/g, '""')}"`;
 
 export const toCsv = (
   rows: readonly AttendanceRow[],
-  messages: Messages
+  messages: Messages,
+  locale: Locale
 ): string => {
   const header = [
     messages["attendance.colId"],
@@ -185,7 +178,7 @@ export const toCsv = (
     .join(",");
 
   const body = rows.map((row) => {
-    const entry = formatEntry(row.at);
+    const entry = formatEntry(row.at, locale);
 
     return [
       csvCell(row.uniqueId ?? ""),

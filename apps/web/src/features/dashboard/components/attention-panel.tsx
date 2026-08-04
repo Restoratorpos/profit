@@ -1,3 +1,4 @@
+import { formatPhone } from "@repo/auth/lib/countries";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
@@ -44,6 +45,12 @@ import { daysUntil, formatAmount } from "../types";
  * A card with nothing in it still renders. Its empty state is the answer to the
  * question ("nothing runs out this week"), and hiding the card would leave the
  * operator unsure whether it was checked or simply missing.
+ *
+ * Every row here is a destination, not a readout. The card header opens the
+ * screen behind it already narrowed to what the card is about, and each row
+ * carries the one term that finds that member, product or tab again — because a
+ * six-row list whose only exit is an unfiltered table makes the operator search
+ * for what they were just looking at.
  */
 
 interface AttentionCardProperties {
@@ -52,9 +59,15 @@ interface AttentionCardProperties {
   count: number;
   emptyText: string;
   icon: LucideIcon;
-  linkLabel: string;
   title: string;
-  to: "/inventory" | "/members" | "/orders";
+  /**
+   * The "see all" control, built by the caller rather than from a `to` prop:
+   * each card narrows its destination differently, and passing a path and a
+   * search object down through here would erase the router's own typing of the
+   * pair — which is the thing that catches a link to a filter that no longer
+   * exists.
+   */
+  viewAll: ReactNode;
 }
 
 const AttentionCard = ({
@@ -62,9 +75,8 @@ const AttentionCard = ({
   count,
   emptyText,
   icon: Icon,
-  linkLabel,
   title,
-  to,
+  viewAll,
 }: AttentionCardProperties) => (
   <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-4">
     <header className="flex items-center justify-between gap-2">
@@ -81,12 +93,7 @@ const AttentionCard = ({
         ) : null}
       </div>
 
-      <Button asChild size="sm" variant="ghost">
-        <Link to={to}>
-          {linkLabel}
-          <ArrowRightIcon />
-        </Link>
-      </Button>
+      {viewAll}
     </header>
 
     {count === 0 ? (
@@ -100,6 +107,9 @@ const AttentionCard = ({
     )}
   </section>
 );
+
+/** The name in a row, as the link that finds it again on its own screen. */
+const ROW_LINK = "truncate font-medium hover:underline";
 
 /**
  * How long a membership has left, in whichever unit it is sold by.
@@ -166,9 +176,17 @@ export const AttentionPanel = ({
       count={expiring.length}
       emptyText={messages["dash.expiringEmpty"]}
       icon={CalendarClockIcon}
-      linkLabel={messages["dash.viewAll"]}
       title={messages["dash.expiring"]}
-      to="/members"
+      viewAll={
+        <Button asChild size="sm" variant="ghost">
+          {/* The roster's own "muddati tugayotgan" tab, so the six rows above
+              open as the whole list they were the head of. */}
+          <Link search={{ filter: "expiring" }} to="/members">
+            {messages["dash.viewAll"]}
+            <ArrowRightIcon />
+          </Link>
+        </Button>
+      }
     >
       <Table>
         <TableHeader>
@@ -183,8 +201,30 @@ export const AttentionPanel = ({
         <TableBody>
           {expiring.map((row) => (
             <TableRow key={row.id}>
-              <TableCell className="max-w-40 truncate font-medium">
-                {row.name}
+              <TableCell className="max-w-40">
+                <span className="flex min-w-0 flex-col">
+                  {/* Searched by phone where there is one: two members can
+                      share a name, and the desk is about to ring this one. */}
+                  <Link
+                    className={ROW_LINK}
+                    search={{ q: row.phone ?? row.name }}
+                    to="/members"
+                  >
+                    {row.name}
+                  </Link>
+                  {row.phone ? (
+                    /* A real tel: link, not a printed number — on the desk's
+                       tablet this is the call, and on the terminal it is still
+                       the digits to read out. */
+                    <a
+                      className="truncate text-caption text-muted-foreground tabular-nums hover:underline"
+                      href={`tel:+${row.phone}`}
+                      title={messages["dash.call"]}
+                    >
+                      {formatPhone(row.phone)}
+                    </a>
+                  ) : null}
+                </span>
               </TableCell>
               <TableCell className="max-w-32 truncate text-muted-foreground">
                 {row.plan}
@@ -202,9 +242,19 @@ export const AttentionPanel = ({
       count={lowStock.length}
       emptyText={messages["dash.lowStockEmpty"]}
       icon={PackageXIcon}
-      linkLabel={messages["dash.viewAll"]}
       title={messages["dash.lowStock"]}
-      to="/inventory"
+      viewAll={
+        <Button asChild size="sm" variant="ghost">
+          {/* Sorted, not filtered: this card mixes "kam qoldi" with "tugagan"
+              and the stock screen's filter is one status at a time, so picking
+              one would hide half of what was just on screen. Ascending stock
+              puts the same rows on top and keeps the rest reachable. */}
+          <Link search={{ sort: "stock" }} to="/inventory">
+            {messages["dash.viewAll"]}
+            <ArrowRightIcon />
+          </Link>
+        </Button>
+      }
     >
       <Table>
         <TableHeader>
@@ -218,8 +268,14 @@ export const AttentionPanel = ({
         <TableBody>
           {lowStock.map((row) => (
             <TableRow key={row.id}>
-              <TableCell className="max-w-48 truncate font-medium">
-                {row.name}
+              <TableCell className="max-w-48">
+                <Link
+                  className={ROW_LINK}
+                  search={{ q: row.name }}
+                  to="/inventory"
+                >
+                  {row.name}
+                </Link>
               </TableCell>
               <TableCell className="text-right">
                 {/* The badge says which of the two states this is; the figure
@@ -248,9 +304,15 @@ export const AttentionPanel = ({
       count={debtors.length}
       emptyText={messages["dash.debtorsEmpty"]}
       icon={WalletMinimalIcon}
-      linkLabel={messages["dash.viewAll"]}
       title={messages["dash.debtors"]}
-      to="/orders"
+      viewAll={
+        <Button asChild size="sm" variant="ghost">
+          <Link search={{ filter: "unpaid" }} to="/orders">
+            {messages["dash.viewAll"]}
+            <ArrowRightIcon />
+          </Link>
+        </Button>
+      }
     >
       <Table>
         <TableHeader>
@@ -266,7 +328,16 @@ export const AttentionPanel = ({
             <TableRow key={`${row.type}:${row.id}`}>
               <TableCell className="max-w-48">
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{row.name}</span>
+                  {/* The unpaid tab, narrowed to this one tab-holder — the
+                      orders list searches names and carries staff as well as
+                      members, so both kinds of row land somewhere real. */}
+                  <Link
+                    className={ROW_LINK}
+                    search={{ filter: "unpaid", q: row.name }}
+                    to="/orders"
+                  >
+                    {row.name}
+                  </Link>
                   {/* Members and staff both run tabs, and chasing one is not
                       the same conversation as chasing the other. */}
                   <span className="text-caption text-muted-foreground">

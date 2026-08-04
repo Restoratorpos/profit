@@ -102,8 +102,19 @@ function DialogFooter({
 }) {
   return (
     <div
+      /*
+       * `flex-wrap` is load-bearing, not tidiness. Buttons are `shrink-0` and
+       * `whitespace-nowrap` by design — a touch target that shrinks under a long
+       * label is not a touch target — so a footer that cannot wrap has nowhere to
+       * put the overflow and pushes it straight out through the side of the
+       * dialog. Three actions plus a translated label is enough to do it, and the
+       * languages this ships in are the long ones.
+       *
+       * `rounded-b-lg` because the -mx/-mb bleed paints this bar over the card's
+       * own rounded corners, squaring them off.
+       */
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 border-border border-t bg-sidebar p-3 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex flex-col-reverse flex-wrap gap-2 rounded-b-lg border-border border-t bg-sidebar p-3 sm:flex-row sm:justify-end",
         className
       )}
       data-slot="dialog-footer"

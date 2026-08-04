@@ -1,6 +1,6 @@
 import {
   API_BASE,
-  refreshSession,
+  attemptRefresh,
   request,
   toApiError,
 } from "@/lib/api/client";
@@ -12,8 +12,63 @@ import { setAccessToken } from "./tokens";
  * lib/api/client.ts, which every feature uses.
  */
 
-/** Asked at boot: is there still a session behind the httpOnly refresh cookie? */
-export const restoreSession = (): Promise<Session | null> => refreshSession();
+/**
+ * What the boot check concluded.
+ *
+ * `offline` is the one that has to exist separately: it is not a session and it
+ * is not a signed-out visitor, it is "the question could not be asked". Treating
+ * it as signed-out is what put operators back at the sign-in screen every time
+ * the API blinked — and a sign-in form is useless in that state anyway, since
+ * signing in needs the same server that just failed to answer.
+ */
+export type RestoreOutcome =
+  | { status: "session"; session: Session }
+  | { status: "signed-out" }
+  | { status: "offline" };
+
+/**
+ * How long to wait before asking again, per attempt.
+ *
+ * Short, because the whole app is waiting on this: two extra tries covers a dev
+ * server mid-restart or a packet lost on the desk's Wi-Fi, and anything longer
+ * than that is a real outage the operator should be told about rather than
+ * spun at.
+ */
+const RETRY_DELAYS_MS = [300, 1000];
+
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Asked at boot: is there still a session behind the httpOnly refresh cookie?
+ *
+ * A rejection is taken at face value — the cookie is gone, expired, or the
+ * account was closed, and there is nothing to retry. Anything else is retried,
+ * because this single request is the *only* thing deciding whether a reload
+ * lands the operator back in the app or at the sign-in screen, and one dropped
+ * packet should not be able to decide it.
+ */
+export const restoreSession = async (): Promise<RestoreOutcome> => {
+  for (let attempt = 0; ; attempt++) {
+    const outcome = await attemptRefresh();
+
+    if (outcome.status === "ok") {
+      return { status: "session", session: outcome.session };
+    }
+
+    if (outcome.status === "rejected") {
+      return { status: "signed-out" };
+    }
+
+    if (attempt >= RETRY_DELAYS_MS.length) {
+      return { status: "offline" };
+    }
+
+    await wait(RETRY_DELAYS_MS[attempt] ?? 0);
+  }
+};
 
 export const signIn = async (
   phone: string,

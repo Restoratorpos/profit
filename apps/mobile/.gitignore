@@ -1,0 +1,21 @@
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Holds this machine's LAN address, which is per-developer.
+.env
+.env.local
+.env*.local
+
+# Native projects — this app is managed; `expo prebuild` regenerates them.
+/ios
+/android
+
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*

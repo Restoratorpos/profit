@@ -335,8 +335,7 @@ const OrderCard = ({
   // orders reads as separate receipts rather than one long list.
   <div className="rounded-2xl bg-muted p-2">
     <p className="px-2 py-1.5 font-semibold text-muted-foreground text-xs uppercase tracking-wide">
-      {formatDayLabel(order.createdAt, locale)} ·{" "}
-      {formatTime(order.createdAt, locale)}
+      {formatDayLabel(order.createdAt, locale)} · {formatTime(order.createdAt)}
     </p>
     <ul className="divide-y overflow-hidden rounded-xl border">
       {order.items.map((item) => {

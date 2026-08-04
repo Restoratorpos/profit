@@ -1,5 +1,9 @@
 import { type Session, sessionSchema } from "@/lib/auth/session";
-import { getAccessToken, setAccessToken } from "@/lib/auth/tokens";
+import {
+  getAccessToken,
+  setAccessToken,
+  tokenGeneration,
+} from "@/lib/auth/tokens";
 
 /**
  * The transport every feature calls the API through.
@@ -87,7 +91,7 @@ export const request = (
  * several requests 401 at once (which is the normal case, since a dashboard
  * fires many queries together) they must all wait on one refresh.
  */
-let refreshInFlight: Promise<Session | null> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
 
 /**
  * The two ways a refresh can fail, which are not the same thing.
@@ -101,6 +105,19 @@ let refreshInFlight: Promise<Session | null> | null = null;
  * concluded about it.
  */
 type RefreshFailure = "rejected" | "unavailable";
+
+/**
+ * What a refresh attempt actually established, which is more than "did it work".
+ *
+ * The two failures are not interchangeable and the caller decides what to do
+ * about each: a rejection is final and means signing out, while an unanswered
+ * request means try again in a moment. Collapsing them to `null` is what turned
+ * a restarting dev server into a sign-out — the boot path had no way to tell
+ * "you have no session" from "I could not ask".
+ */
+export type RefreshOutcome =
+  | { status: "ok"; session: Session }
+  | { status: RefreshFailure };
 
 /**
  * Whether a failed refresh means the session is over.
@@ -117,15 +134,16 @@ const failureOf = (response: Response): RefreshFailure =>
     : "unavailable";
 
 /** Ends the session locally. Signed-out UI and an empty cache follow from this. */
-const endSession = (failure: RefreshFailure): null => {
+const endSession = (failure: RefreshFailure): RefreshOutcome => {
   if (failure === "rejected") {
     setAccessToken(null);
   }
 
-  return null;
+  return { status: failure };
 };
 
-export const refreshSession = (): Promise<Session | null> => {
+/** The refresh, with the reason it failed intact. Single-flighted. */
+export const attemptRefresh = (): Promise<RefreshOutcome> => {
   refreshInFlight ??= (async () => {
     try {
       // Body is empty: the refresh token travels as the cookie.
@@ -141,7 +159,7 @@ export const refreshSession = (): Promise<Session | null> => {
       const session = sessionSchema.parse(await response.json());
       setAccessToken(session.accessToken);
 
-      return session;
+      return { status: "ok", session };
     } catch {
       /*
        * A throw here is a transport failure or an unreadable body — never a
@@ -158,6 +176,30 @@ export const refreshSession = (): Promise<Session | null> => {
   return refreshInFlight;
 };
 
+/** The same thing for callers that only need "did I end up with a session?". */
+export const refreshSession = async (): Promise<Session | null> => {
+  const outcome = await attemptRefresh();
+
+  return outcome.status === "ok" ? outcome.session : null;
+};
+
+/**
+ * Gets hold of a usable token after a 401, or reports that there is none.
+ *
+ * A 401 does not always mean the token expired — it also happens to a request
+ * that was already in flight when someone else renewed it. That request is
+ * simply stale, and refreshing on its behalf would spend a second refresh token
+ * to learn what the app already knows. The generation captured before the
+ * request tells the two apart.
+ */
+const renewedSince = async (generation: number): Promise<boolean> => {
+  if (tokenGeneration() !== generation) {
+    return getAccessToken() !== null;
+  }
+
+  return (await attemptRefresh()).status === "ok";
+};
+
 /**
  * Calls the API as the signed-in user, renewing the access token once if it has
  * expired.
@@ -169,12 +211,11 @@ export const apiFetch = async <T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> => {
+  const generation = tokenGeneration();
   let response = await request(path, init);
 
   if (response.status === 401) {
-    const session = await refreshSession();
-
-    if (!session) {
+    if (!(await renewedSince(generation))) {
       throw await toApiError(response);
     }
 

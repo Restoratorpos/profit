@@ -9,6 +9,7 @@ import {
 import { requireAuth } from "../middleware/auth.js";
 import { loginRateLimit } from "../middleware/login-rate-limit.js";
 import {
+  changePasswordSchema,
   credentialsSchema,
   loginSchema,
   refreshSchema,
@@ -16,6 +17,7 @@ import {
   type SessionMode,
 } from "../schemas/auth.js";
 import {
+  changePassword,
   login,
   logout,
   refreshSession,
@@ -151,4 +153,21 @@ export const authRoutes = new Hono<AppEnv>()
       branchId: user.branchId,
     });
   })
-  .get("/me", requireAuth, (c) => c.json(c.get("user")));
+  .get("/me", requireAuth, (c) => c.json(c.get("user")))
+  /**
+   * Changing your own password. `requireAuth`, so the worker it applies to is a
+   * signed claim rather than an id in the body — there is no way to spell "some
+   * other account" here.
+   */
+  .patch(
+    "/password",
+    requireAuth,
+    zValidator("json", changePasswordSchema),
+    async (c) => {
+      const { currentPassword, newPassword } = c.req.valid("json");
+
+      await changePassword(c.get("user").id, currentPassword, newPassword);
+
+      return c.body(null, 204);
+    }
+  );

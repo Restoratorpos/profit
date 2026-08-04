@@ -9,7 +9,10 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { UsersIcon } from "lucide-react";
+import { formatDate } from "@/lib/date";
+import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { usePlanMembers } from "../api";
 import type { PlanMember } from "../types";
 
@@ -21,27 +24,12 @@ interface PlanMembersSheetProperties {
   planName: string;
 }
 
-/** Dates arrive as ISO strings; only the day matters at the desk. */
-const formatDate = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short" }).format(
-    parsed
-  );
-};
-
 const MemberRow = ({
+  locale,
   member,
   messages,
 }: {
+  locale: Locale;
   member: PlanMember;
   messages: Messages;
 }) => (
@@ -75,7 +63,7 @@ const MemberRow = ({
       ) : null}
       <div className="flex gap-2">
         <dt>{messages["plans.memberEnds"]}:</dt>
-        <dd className="text-foreground">{formatDate(member.endsAt)}</dd>
+        <dd className="text-foreground">{formatDate(member.endsAt, locale)}</dd>
       </div>
       {member.remainingVisits === null ? null : (
         <div className="flex gap-2">
@@ -94,6 +82,8 @@ export const PlanMembersSheet = ({
   planId,
   planName,
 }: PlanMembersSheetProperties) => {
+  const { locale } = useLocale();
+
   /*
    * Replaces a hand-rolled effect that fetched on open and carried an `active`
    * flag so a late response from a previously opened plan could not overwrite
@@ -145,6 +135,7 @@ export const PlanMembersSheet = ({
               {members.map((member) => (
                 <MemberRow
                   key={member.membershipId}
+                  locale={locale}
                   member={member}
                   messages={messages}
                 />

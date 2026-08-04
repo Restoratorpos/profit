@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { AttendanceEventView } from "@/features/devices/types";
+import { formatTime } from "@/lib/date";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import {
   type DoorState,
   type DuplicateScan,
@@ -154,7 +156,7 @@ const doorView = (
         repeat.reason === "inside"
           ? messages["attendance.alreadyInside"]
           : messages["attendance.alreadyScanned"],
-        formatEntry(repeat.at).time,
+        formatTime(repeat.at),
         repeat.deviceName
       ),
       detailTone: "text-amber-700/90 dark:text-amber-400",
@@ -172,7 +174,7 @@ const doorView = (
         scan.direction === "out"
           ? messages["devices.directionOutShort"]
           : messages["devices.directionInShort"],
-        formatEntry(scan.time).time,
+        formatTime(scan.time),
         scan.deviceName
       ),
       detailTone: "text-muted-foreground",
@@ -289,7 +291,7 @@ const UnknownScanBanner = ({
         {messages["attendance.unknownScan"]}
       </p>
       <p className="truncate text-destructive/90 text-sm">
-        {[`ID ${scan.employeeNo}`, formatEntry(scan.at).time, scan.deviceName]
+        {[`ID ${scan.employeeNo}`, formatTime(scan.at), scan.deviceName]
           .filter(Boolean)
           .join(" · ")}
       </p>
@@ -331,6 +333,7 @@ export const PendingQueue = ({
   onDecide,
   onRemoveUnknown,
 }: PendingQueueProperties) => {
+  const { locale } = useLocale();
   const { duplicateScan, latestEvent, pending, unknownScan } = door;
 
   // Oldest first from the server, so the newest arrival is the last one.
@@ -414,7 +417,7 @@ export const PendingQueue = ({
         </div>
 
         {pending.map((decision) => {
-          const entry = formatEntry(decision.at);
+          const entry = formatEntry(decision.at, locale);
           const isDeciding = decidingId === decision.sessionId;
 
           return (

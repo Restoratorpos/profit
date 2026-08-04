@@ -1,3 +1,4 @@
+import { PhoneField } from "@repo/auth/components/phone-field";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
   Field,
@@ -228,12 +229,16 @@ const PersonFields = ({
           <span className="text-destructive">*</span>{" "}
           {messages["members.fieldPhone"]}
         </FieldLabel>
-        <Input
-          aria-invalid={Boolean(errors.phone)}
+        {/* Country picker + national number, submitted as one bare-digit
+            `phone` field — the same control the sign-in page uses. A member's
+            phone is how the desk finds them, so it is worth typing correctly
+            once rather than searching for three variants of it later. */}
+        <PhoneField
+          customLabel={messages["common.otherCountry"]}
           defaultValue={member?.phone ?? ""}
           disabled={disabled}
           id="member-phone"
-          inputMode="tel"
+          invalid={Boolean(errors.phone)}
           name="phone"
         />
         {errors.phone ? <FieldError>{errors.phone}</FieldError> : null}

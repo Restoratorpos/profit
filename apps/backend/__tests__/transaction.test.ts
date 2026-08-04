@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  INCOME_CATEGORIES,
   MANUAL_EXPENSE_CATEGORIES,
   MANUAL_INCOME_CATEGORIES,
 } from "../src/schemas/transaction.js";
@@ -332,6 +333,20 @@ describe("isManualRow", () => {
 
   it("disowns a shop order's income outright — the category is not ours", () => {
     expect(isManualRow("order", null, MANUAL_INCOME_CATEGORIES)).toBe(false);
+  });
+
+  /**
+   * `owner_deposit` was withdrawn from `INCOME_CATEGORIES` — the desk cannot
+   * book the owner's own money any more. Rows written before that still have to
+   * be voidable: this screen wrote them and no document elsewhere can reverse
+   * them, so letting the picker's list decide would make every past deposit
+   * permanent, including one typed by mistake.
+   */
+  it("still owns an owner deposit, though one can no longer be written", () => {
+    expect(INCOME_CATEGORIES).not.toContain("owner_deposit");
+    expect(isManualRow("owner_deposit", null, MANUAL_INCOME_CATEGORIES)).toBe(
+      true
+    );
   });
 
   it("owns goods bought with no delivery document behind them", () => {

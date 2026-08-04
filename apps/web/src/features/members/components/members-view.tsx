@@ -49,6 +49,7 @@ import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import { IdCode } from "@/components/id-code";
 import { PAGE_SIZES } from "@/components/use-pagination";
 import { type MemberOrderSummary, OrderDetailSheet } from "@/features/orders";
+import { formatDate } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -56,10 +57,9 @@ import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useDeleteMember, useMembersPage, useSetMemberActive } from "../api";
 import {
   DEBT_FILTERS,
-  DEFAULT_MEMBER_QUERY,
   type DebtFilter,
-  formatDay,
   hasDebt,
+  isoDay,
   type MemberFilter,
   type MemberListItem,
   type MemberMembership,
@@ -79,6 +79,11 @@ interface MembersViewProperties {
   locale: Locale;
   messages: Messages;
   plans: readonly PlanOption[];
+  /**
+   * What the URL asked for, read once as the opening filters. Later edits stay
+   * here rather than going back to the address bar — see the route.
+   */
+  seed: MemberQuery;
 }
 
 const FILTERS: readonly {
@@ -164,7 +169,8 @@ const STATE_STYLE: Record<MembershipState, string> = {
 const remainderOf = (
   membership: MemberMembership,
   messages: Messages,
-  isPrimary: boolean
+  isPrimary: boolean,
+  locale: Locale
 ): string | null => {
   if (membership.state === "expired") {
     return null;
@@ -181,7 +187,7 @@ const remainderOf = (
       : `${membership.remainingVisits} ${messages["members.visitsShort"]}`;
   }
 
-  return membership.endsAt ? formatDay(membership.endsAt) : null;
+  return membership.endsAt ? formatDate(membership.endsAt, locale) : null;
 };
 
 /**
@@ -192,10 +198,12 @@ const remainderOf = (
  * three names and no way to tell which was about to lapse.
  */
 const MembershipBadges = ({
+  locale,
   member,
   messages,
   onOpen,
 }: {
+  locale: Locale;
   member: MemberListItem;
   messages: Messages;
   onOpen: () => void;
@@ -208,7 +216,12 @@ const MembershipBadges = ({
     <div className="flex flex-wrap gap-1.5">
       {member.memberships.map((membership, index) => {
         // Index 0 is the plan they were signed up on — see `primaryVisits`.
-        const remainder = remainderOf(membership, messages, index === 0);
+        const remainder = remainderOf(
+          membership,
+          messages,
+          index === 0,
+          locale
+        );
 
         return (
           <Badge
@@ -299,15 +312,15 @@ const buildCsv = (
         [
           membership.name,
           membership.remainingVisits === null
-            ? formatDay(membership.endsAt)
+            ? isoDay(membership.endsAt)
             : `${membership.remainingVisits}x`,
         ]
           .filter(Boolean)
           .join(" ")
       )
       .join(" | "),
-    formatDay(member.startsAt),
-    formatDay(member.endsAt),
+    isoDay(member.startsAt),
+    isoDay(member.endsAt),
     primaryVisits(member) ?? "",
     member.membershipDebt,
     member.shopDebt,
@@ -323,8 +336,9 @@ export const MembersView = ({
   locale,
   messages,
   plans,
+  seed,
 }: MembersViewProperties) => {
-  const [request, setRequest] = useState<MemberQuery>(DEFAULT_MEMBER_QUERY);
+  const [request, setRequest] = useState<MemberQuery>(seed);
   const [editing, setEditing] = useState<MemberListItem | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
   const [managing, setManaging] = useState<MemberListItem | null>(null);
@@ -621,16 +635,17 @@ export const MembersView = ({
                     </TableCell>
                     <TableCell>
                       <MembershipBadges
+                        locale={locale}
                         member={member}
                         messages={messages}
                         onOpen={() => setViewing(member)}
                       />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDay(member.startsAt)}
+                      {formatDate(member.startsAt, locale)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDay(member.endsAt)}
+                      {formatDate(member.endsAt, locale)}
                     </TableCell>
                     <TableCell className="font-semibold tabular-nums">
                       {primaryVisits(member) ?? "—"}
