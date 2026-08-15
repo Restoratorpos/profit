@@ -5,20 +5,26 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { apiFetch, apiPatch, apiPost } from "@/lib/api/client";
+import { apiFetch, apiPatch, apiPost, apiPut } from "@/lib/api/client";
 import type {
+  SalaryHistoryPage,
+  SalaryHistoryQuery,
   SalaryPaymentInput,
   WorkerDetail,
   WorkerListItem,
   WorkerPage,
   WorkerPayroll,
   WorkerQuery,
+  WorkHistoryPage,
 } from "./types";
+import { ALL_WORKERS } from "./types";
 
 export interface RangeBounds {
   from: string;
   to: string;
 }
+
+const paydayKey = ["workers", "payday"] as const;
 
 export const workerKeys = {
   all: ["workers"] as const,
@@ -28,13 +34,24 @@ export const workerKeys = {
     [...workerKeys.all, workerId, "detail", bounds] as const,
   payroll: (workerId: string, period: string) =>
     [...workerKeys.all, workerId, "payroll", period] as const,
+  payments: (query: SalaryHistoryQuery, bounds: RangeBounds) =>
+    [...workerKeys.all, "payments", query, bounds] as const,
+  shifts: (query: SalaryHistoryQuery, bounds: RangeBounds) =>
+    [...workerKeys.all, "shifts", query, bounds] as const,
 };
 
 export interface WorkerInput {
   fullname: string;
   hiredAt: string | null;
   phone: string;
-  role: string;
+  /**
+   * Absent when the worker holds an auth role the position picker cannot
+   * express — an owner or an admin. The backend refuses that write anyway;
+   * omitting it means the save carries no opinion about their role rather than
+   * one that has to be discarded. Required on create, where the sheet always
+   * picks one.
+   */
+  role?: string;
   salaryAmount: string;
   salaryType: string;
   shiftEnd: string | null;
@@ -85,7 +102,13 @@ export const workersPageQuery = (query: WorkerQuery, bounds: RangeBounds) =>
 export const useWorkersPage = (query: WorkerQuery, bounds: RangeBounds) =>
   useQuery(workersPageQuery(query, bounds));
 
-/** One worker's profile and attendance over the range the list is showing. */
+/**
+ * One worker's profile and attendance over a range.
+ *
+ * `keepPreviousData` for the same reason the table has it, now that the detail
+ * panel picks its own range: every preset change is a new key, and without it
+ * the panel emptied to a spinner between one answer and the next.
+ */
 export const useWorkerDetail = (workerId: string | null, bounds: RangeBounds) =>
   useQuery({
     queryKey: workerKeys.detail(workerId ?? "", bounds),
@@ -94,6 +117,7 @@ export const useWorkerDetail = (workerId: string | null, bounds: RangeBounds) =>
         `/workers/${workerId}?${new URLSearchParams({ from: bounds.from, to: bounds.to }).toString()}`
       ),
     enabled: workerId !== null,
+    placeholderData: keepPreviousData,
   });
 
 /**
@@ -112,6 +136,96 @@ export const useWorkerPayroll = (workerId: string | null, period: string) =>
       ),
     enabled: workerId !== null,
   });
+
+const toPaymentsQuery = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds
+): string => {
+  const params = new URLSearchParams({
+    page: String(query.page),
+    pageSize: String(query.pageSize),
+  });
+
+  if (bounds.from) {
+    params.set("from", bounds.from);
+  }
+
+  if (bounds.to) {
+    params.set("to", bounds.to);
+  }
+
+  // The sentinel means "everyone", which the backend spells as no filter.
+  if (query.workerId !== ALL_WORKERS) {
+    params.set("workerId", query.workerId);
+  }
+
+  return params.toString();
+};
+
+/**
+ * Every wage the gym has handed over, newest first.
+ *
+ * `enabled` is the drawer's open state: this is a whole-gym read behind a
+ * button, and fetching it on every staff-page render would make the page pay
+ * for a panel most visits never open.
+ */
+export const useSalaryHistory = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds,
+  enabled: boolean
+) =>
+  useQuery({
+    queryKey: workerKeys.payments(query, bounds),
+    queryFn: () =>
+      apiFetch<SalaryHistoryPage>(
+        `/workers/payments?${toPaymentsQuery(query, bounds)}`
+      ),
+    enabled,
+    // Holds the table steady while a new filter loads, like the staff list.
+    placeholderData: keepPreviousData,
+  });
+
+/**
+ * Every shift the gym's staff has worked, newest first.
+ *
+ * Takes the same filters and the same `enabled` gate as `useSalaryHistory`, and
+ * is called with `enabled` false while the drawer sits on the other tab — the
+ * two never fetch at once, so switching costs one request rather than keeping a
+ * second whole-gym read warm for a table nobody is looking at.
+ */
+export const useWorkHistory = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds,
+  enabled: boolean
+) =>
+  useQuery({
+    queryKey: workerKeys.shifts(query, bounds),
+    queryFn: () =>
+      apiFetch<WorkHistoryPage>(
+        `/workers/shifts?${toPaymentsQuery(query, bounds)}`
+      ),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+
+/**
+ * The day of the month monthly salaries are settled on, or null when nobody has
+ * chosen one. A gym-wide setting, so it is keyed by nothing but itself.
+ */
+export const usePayday = () =>
+  useQuery({
+    queryKey: paydayKey,
+    queryFn: () => apiFetch<{ payday: number | null }>("/workers/payday"),
+  });
+
+export const useSetPayday = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payday: number) => apiPut<void>("/workers/payday", { payday }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: paydayKey }),
+  });
+};
 
 const useInvalidateWorkers = () => {
   const queryClient = useQueryClient();

@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@repo/design-system/components/ui/select";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -38,6 +38,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { type ComboInput, useSaveCombo } from "../api";
@@ -335,7 +336,7 @@ const QuantityModal = ({
           {modes.map((m) => (
             <Button
               aria-checked={mode === m}
-              className={cn(mode === m && SELECTED_FILL)}
+              className={cn(mode === m && SELECTED_TINT)}
               key={m}
               onClick={() => setMode(m)}
               role="radio"
@@ -676,7 +677,7 @@ export const ComboComposer = ({
               return (
                 <Button
                   aria-checked={active}
-                  className={cn("gap-2", active && SELECTED_FILL)}
+                  className={cn("gap-2", active && SELECTED_TINT)}
                   key={side.value}
                   onClick={() => setComboType(side.value)}
                   role="radio"
@@ -706,11 +707,10 @@ export const ComboComposer = ({
             <FieldLabel htmlFor="combo-price">
               {messages["combos.price"]}
             </FieldLabel>
-            <Input
+            <MoneyInput
               disabled={isPending}
               id="combo-price"
-              inputMode="decimal"
-              onChange={(event) => setPrice(event.target.value)}
+              onChange={setPrice}
               placeholder="0"
               value={price}
             />

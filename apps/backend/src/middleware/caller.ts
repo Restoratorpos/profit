@@ -6,21 +6,27 @@ import { authenticateService } from "./service.js";
 /**
  * Accepts either kind of caller and leaves the context identical either way.
  *
- * This exists for the length of the Next.js → Vite migration and no longer.
- * `apps/app` still reaches this API server-to-server with SERVICE_TOKEN, while
- * `apps/web` talks to it from a browser with a per-user bearer token. Both have
- * to work at once or the migration becomes a flag day.
+ * This existed for the length of the Next.js → Vite migration: `apps/app`
+ * reached this API server-to-server with SERVICE_TOKEN while `apps/web` talked
+ * to it from a browser with a per-user bearer token, and both had to work at
+ * once or the migration became a flag day.
  *
  * A bearer token wins when one is present, and a *bad* bearer token is rejected
  * rather than falling through to the service check — otherwise a browser with
  * an expired session could be silently upgraded to service-level trust by
  * whatever proxy happened to add the shared header.
  *
- * Phase 5 deletes this: the routes go back to a single middleware
- * (`requireAuth`), `requireService` is removed, and SERVICE_TOKEN comes out of
- * both environments. Until then, every route reachable from the browser is only
- * as strong as the weaker of the two doors — which is why the service door has
- * to close as soon as apps/app stops using it.
+ * ## `apps/app` was deleted on 2026-07-29 and nothing uses the service door
+ *
+ * Every route here is only as strong as the weaker of its two doors, and the
+ * weaker one now has nobody behind it: `requireService` takes a shared secret
+ * plus a **client-supplied `x-gym-id`**, which was only ever safe because a
+ * trusted first-party server decided the gym. Anyone holding SERVICE_TOKEN can
+ * now name any tenant.
+ *
+ * Closing it: drop `authenticateService` below so this becomes `requireAuth`,
+ * delete `middleware/service.ts`, remove SERVICE_TOKEN from `env.ts` and both
+ * `.env.local` files, and update `__tests__/caller-auth.test.ts`.
  */
 export const requireCaller = createMiddleware<AppEnv>(async (c, next) => {
   const user = authenticateBearer(c.req.header("authorization"));

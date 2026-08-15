@@ -1,5 +1,6 @@
 /** Mirrors what apps/backend returns from /members. */
 
+import { toDate, toDateInput } from "@/lib/date";
 import { endsChain, legTakes, type PaymentLeg } from "@/lib/payment-legs";
 
 export {
@@ -15,15 +16,52 @@ export {
   withLeg,
 } from "@/lib/payment-legs";
 
-export interface MemberPlanBadge {
-  count: number;
+/** Where one membership stands: mirrors the backend's `MembershipState`. */
+export type MembershipState = "active" | "expiring" | "expired";
+
+/** One membership a member holds, with its own end date, visits and money. */
+export interface MemberMembership {
+  /** Decimal string. Still owed on this one membership: `price - paid`. */
+  debt: string;
+  /**
+   * Decimal string, or null at full price. What was taken off the plan's list
+   * price when this was sold — `price + discount` is what it cost that day.
+   */
+  discount: string | null;
+  endsAt: string | null;
+  id: string;
+  /** The plan name. There is no category on `plans`, so this is the type. */
   name: string;
+  /** Decimal string. Taken so far against this membership. */
+  paid: string;
+  /** Which plan it is, so a renewal of the same one can be told apart. */
+  planId: string | null;
+  /**
+   * Decimal string. What it was **charged** — a comp records what was actually
+   * taken, so "0.00 paid of 0.00" is a gift rather than an unpaid sale.
+   */
+  price: string;
+  remainingVisits: number | null;
+  startsAt: string | null;
+  state: MembershipState;
+  /** What it was sold with, so "76 of 80" can be read rather than just "76". */
+  totalVisits: number | null;
+}
+
+/** One time a member came in. */
+export interface MemberVisit {
+  at: string | null;
+  id: number;
 }
 
 export interface MemberListItem {
   birthdate: string | null;
   branchId: string | null;
-  /** Latest end across their memberships, ISO. */
+  /**
+   * The **soonest upcoming** expiry across their memberships, ISO, or null when
+   * none is still running. Not the latest — that hid a lapsing gym plan behind
+   * a year-long sauna package.
+   */
   endsAt: string | null;
   gender: string | null;
   /** True when a face is enrolled on at least one terminal. */
@@ -32,11 +70,13 @@ export interface MemberListItem {
   isActive: boolean;
   /** Decimal string. "0.00" means nothing owed. */
   membershipDebt: string;
+  /**
+   * Every membership they hold, in the order they were sold, each with its own
+   * clock. The first entry is the plan they were originally signed up on.
+   */
+  memberships: MemberMembership[];
   name: string;
   phone: string | null;
-  plans: MemberPlanBadge[];
-  /** Null when no membership counts visits. */
-  remainingVisits: number | null;
   shopDebt: string;
   startsAt: string | null;
   uniqueId: string | null;
@@ -153,6 +193,38 @@ export const DEFAULT_MEMBER_QUERY: MemberQuery = {
   query: "",
 };
 
+/**
+ * The part of the query another screen can hand over in a URL.
+ *
+ * Only the three fields that mean something to a caller — a term to look for
+ * and the two filters. Paging is deliberately absent: a link that lands on page
+ * four of somebody else's result set is a link that breaks the moment a member
+ * is added.
+ */
+export interface MemberSearch {
+  debt?: DebtFilter;
+  filter?: MemberFilter;
+  q?: string;
+}
+
+/**
+ * The URL, widened back into what the list actually asks the backend for.
+ *
+ * Every field is absent-able, so an omitted one falls back to what the screen
+ * opens on by itself — which is what lets `/members` and `/members?filter=all`
+ * be the same screen rather than two.
+ *
+ * Shared by the route loader and the page so the query warmed during navigation
+ * is keyed identically to the one the page then subscribes to. Deriving it
+ * twice by hand is how a deep link ends up fetching the same page twice.
+ */
+export const memberQueryFrom = (search: MemberSearch): MemberQuery => ({
+  ...DEFAULT_MEMBER_QUERY,
+  debt: search.debt ?? DEFAULT_MEMBER_QUERY.debt,
+  filter: search.filter ?? DEFAULT_MEMBER_QUERY.filter,
+  query: search.q ?? DEFAULT_MEMBER_QUERY.query,
+});
+
 export interface MemberCounts {
   debt: { any: number; membership: number; shop: number };
   status: { active: number; all: number; expiring: number; inactive: number };
@@ -173,8 +245,51 @@ export interface MemberPage {
 /** A debt column shows a dash rather than "0", which reads as a real figure. */
 export const hasDebt = (value: string): boolean => Number(value) > 0;
 
-/** Dates come back ISO; only the day is ever shown. */
-export const formatDay = (value: string | null): string => {
+/**
+ * `"YYYY-MM-DD"` in local time, or `""` for nothing — a **value**, not a label.
+ *
+ * This is what a date input holds and what the CSV export writes, so it stays
+ * machine-shaped. Anything a person reads goes through `formatDate` from
+ * `@/lib/date` instead ("8 mart, 2026"); this used to be both, and the tables
+ * showed ISO strings to the desk as a result.
+ */
+export const isoDay = (value: string | null): string => {
+  const parsed = toDate(value);
+
+  return parsed ? toDateInput(parsed) : "";
+};
+
+/** Today as "YYYY-MM-DD" in local time — the default membership start. */
+export const todayIso = (): string => toDateInput(new Date());
+
+export const initialOf = (name: string): string =>
+  name.trim().charAt(0).toUpperCase() || "?";
+
+/*
+ * Month names spelled out here rather than taken from `Intl`.
+ *
+ * The runtime's `uz-UZ` data is not consistent across browsers — some ship the
+ * Cyrillic month names, some fall back to English, and a date that reads
+ * differently on the desk terminal than on the manager's laptop is a support
+ * call. A fixed list is the same everywhere.
+ */
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+/** `"26-July, 2026"` — how a date reads wherever it is shown to the desk. */
+export const formatLongDay = (value: string | null): string => {
   if (!value) {
     return "—";
   }
@@ -185,15 +300,25 @@ export const formatDay = (value: string | null): string => {
     return "—";
   }
 
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, "0");
-  const day = String(parsed.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return `${parsed.getDate()}-${MONTHS[parsed.getMonth()]}, ${parsed.getFullYear()}`;
 };
 
-/** Today as "YYYY-MM-DD" in local time — the default membership start. */
-export const todayIso = (): string => formatDay(new Date().toISOString());
+/** `"26-July, 2026"` and `"08:18"` — how a visit reads in the list. */
+export const formatVisit = (
+  value: string | null
+): { day: string; time: string } => {
+  if (!value) {
+    return { day: "—", time: "" };
+  }
 
-export const initialOf = (name: string): string =>
-  name.trim().charAt(0).toUpperCase() || "?";
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return { day: "—", time: "" };
+  }
+
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+
+  return { day: formatLongDay(value), time: `${hours}:${minutes}` };
+};

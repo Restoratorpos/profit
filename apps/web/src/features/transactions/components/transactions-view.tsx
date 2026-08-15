@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
+import { toBareAmount } from "@/lib/money";
 import {
   useCreateExpense,
   useCreateIncome,
@@ -11,7 +13,6 @@ import {
   categoryNeedsMember,
   categoryNeedsSupplier,
   categoryNeedsWorker,
-  digitsOnly,
   type LedgerFilter,
   type TransactionPage,
   type TransactionParties,
@@ -45,6 +46,7 @@ export const TransactionsView = ({
   page,
   parties,
 }: TransactionsViewProperties) => {
+  const { locale } = useLocale();
   const [tab, setTab] = useState<TxTab>("expense");
   const [form, setForm] = useState<FormState>(initialForm);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export const TransactionsView = ({
     form.workerId === null;
 
   const handleSave = () => {
-    const amount = digitsOnly(form.amount);
+    const amount = toBareAmount(form.amount);
     const note = form.note.trim() || null;
 
     if (tab === "transfer") {
@@ -210,6 +212,7 @@ export const TransactionsView = ({
         <LedgerPanel
           disabled={isPending}
           filter={filter}
+          locale={locale}
           messages={messages}
           onFilter={handleFilter}
           onVoid={handleVoid}

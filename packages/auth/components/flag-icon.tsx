@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { CUSTOM_COUNTRY_CODE as CUSTOM_CODE } from "../lib/countries";
 
 /**
  * Flags as inline SVG rather than emoji.
@@ -111,6 +112,18 @@ const FLAGS: Record<string, ReactElement> = {
       <rect fill="#D52B1E" height="5.33" width="24" y="10.67" />
     </>
   ),
+  /*
+   * "Somewhere else" — the option for a number this product has no flag for.
+   * A globe rather than a seventh flag, drawn in `currentColor` so it reads as
+   * an icon in the list rather than as a country of its own.
+   */
+  [CUSTOM_CODE]: (
+    <g fill="none" stroke="currentColor" strokeOpacity="0.75" strokeWidth="1.1">
+      <circle cx="12" cy="8" r="6" />
+      <ellipse cx="12" cy="8" rx="2.6" ry="6" />
+      <path d="M6.2 6h11.6M6.2 10h11.6" />
+    </g>
+  ),
 };
 
 interface FlagIconProperties {
@@ -128,6 +141,25 @@ export const FlagIcon = ({ code, className }: FlagIconProperties) => {
 
   if (!flag) {
     return null;
+  }
+
+  /*
+   * The globe is not a flag and must not be boxed like one — the hairline below
+   * would draw a rectangle around a circle.
+   */
+  if (code === CUSTOM_CODE) {
+    return (
+      <svg
+        aria-hidden="true"
+        className={className}
+        focusable="false"
+        role="presentation"
+        viewBox="0 0 24 16"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        {flag}
+      </svg>
+    );
   }
 
   return (

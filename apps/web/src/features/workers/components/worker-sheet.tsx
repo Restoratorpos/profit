@@ -1,5 +1,5 @@
+import { PhoneField } from "@repo/auth/components/phone-field";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -24,17 +24,21 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { TimePicker } from "@repo/design-system/components/ui/time-picker";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { UserPlusIcon } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { FaceDialog } from "@/components/face-dialog";
 import { FaceField } from "@/components/face-field";
+import { MoneyInput } from "@/components/money-input";
 import { removeFace, setFace } from "@/lib/face/api";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useCreateWorker, useUpdateWorker, type WorkerInput } from "../api";
 import {
+  isUnassignableRole,
   positionLabelKey,
+  toDateInput,
   WEEKDAYS,
   WORKER_POSITIONS,
   type WorkerListItem,
@@ -51,6 +55,145 @@ interface WorkerSheetProperties {
 
 const DEFAULT_DAYS = [1, 2, 3, 4, 5];
 
+/**
+ * The day the hire-date box opens on: **today** for somebody being hired now,
+ * which is when this form is filled in. Hiring on a past date happens, but it is
+ * the exception, and an empty box made the common case a trip to the calendar.
+ *
+ * Editing keeps whatever is stored, blank included — a worker whose hire date
+ * was never recorded was not hired today, and filling one in on their behalf
+ * would write a fact nobody knows.
+ */
+const hireDateOf = (worker: WorkerListItem | null | undefined): string =>
+  worker ? (worker.hiredAt?.slice(0, 10) ?? "") : toDateInput(new Date());
+
+/** Their role when it is one this form must not touch, and null when it is not. */
+const lockedRoleOf = (
+  worker: WorkerListItem | null | undefined
+): string | null => {
+  const role = worker?.role ?? null;
+
+  return isUnassignableRole(role) ? role : null;
+};
+
+/**
+ * The `role` half of a save, which for a locked role is nothing at all.
+ *
+ * Omitted rather than sent-and-discarded: the request then carries no opinion
+ * about an owner's role, which is the honest description of a form that never
+ * offered a way to change it.
+ */
+const roleFieldOf = (lockedRole: string | null, position: WorkerPosition) =>
+  lockedRole === null ? { role: position } : {};
+
+/**
+ * What somebody does here — or, for an owner or an admin, what they are.
+ *
+ * Those two hold an **auth** role, and this picker offers **positions**. The two
+ * vocabularies share one column and diverge at the ends, so a Select built from
+ * positions cannot hold "owner": it would open on somebody else's role and save
+ * it over theirs. That is exactly how a gym lost its only owner — demoted to
+ * `trainer` by an operator editing a phone number, with no owner row in the list
+ * to put it back. So a privileged role is shown and locked rather than offered.
+ * The backend refuses the write as well; this is what lets the operator see why
+ * the field will not move.
+ */
+const PositionField = ({
+  disabled,
+  lockedRole,
+  messages,
+  onChange,
+  value,
+}: {
+  disabled: boolean;
+  /** Non-null when their role is an auth role, which is shown rather than picked. */
+  lockedRole: string | null;
+  messages: Messages;
+  onChange: (next: WorkerPosition) => void;
+  value: WorkerPosition;
+}) => (
+  <Field>
+    <FieldLabel htmlFor="worker-position">
+      {messages["workers.fieldPosition"]}
+    </FieldLabel>
+    {lockedRole ? (
+      <Input
+        disabled
+        id="worker-position"
+        readOnly
+        value={messages[positionLabelKey(lockedRole)]}
+      />
+    ) : (
+      <Select
+        disabled={disabled}
+        onValueChange={(next) => onChange(next as WorkerPosition)}
+        value={value}
+      >
+        <SelectTrigger className="w-full" id="worker-position">
+          <SelectValue placeholder={messages["workers.pickRole"]} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {WORKER_POSITIONS.map((position) => (
+              <SelectItem key={position} value={position}>
+                {messages[positionLabelKey(position)]}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    )}
+  </Field>
+);
+
+/**
+ * The two fields the backend insists on when hiring somebody.
+ *
+ * Phone is checked here rather than left to the server, which answers a missing
+ * one with a validation error the operator did not ask for. It could not be
+ * empty before: the box was pre-filled with "+998", so a blank one saved those
+ * three digits as somebody's phone number.
+ */
+/**
+ * Country picker + national number, submitted as one bare-digit `phone` field —
+ * the same control the sign-in page uses. It replaces a plain box pre-filled
+ * with "+998", which left the operator typing the country code, the grouping and
+ * any foreign number by hand.
+ */
+const PhoneRow = ({
+  disabled,
+  error,
+  messages,
+  phone,
+}: {
+  disabled: boolean;
+  error: string | null;
+  messages: Messages;
+  phone: string;
+}) => (
+  <Field data-invalid={Boolean(error) || undefined}>
+    <FieldLabel htmlFor="worker-phone">
+      {messages["workers.fieldPhone"]}
+    </FieldLabel>
+    <PhoneField
+      customLabel={messages["common.otherCountry"]}
+      defaultValue={phone}
+      disabled={disabled}
+      id="worker-phone"
+      invalid={Boolean(error)}
+      name="phone"
+    />
+    {error ? <FieldError>{error}</FieldError> : null}
+  </Field>
+);
+
+const missingFields = (fullname: string, phone: string) => {
+  const nameError = fullname.length === 0 ? "Required" : null;
+  const phoneError = phone.length === 0 ? "Required" : null;
+
+  return { nameError, ok: !(nameError || phoneError), phoneError };
+};
+
 export const WorkerSheet = ({
   messages,
   onOpenChange,
@@ -63,6 +206,8 @@ export const WorkerSheet = ({
     (WORKER_POSITIONS.find((value) => value === worker?.role) ??
       "trainer") as WorkerPosition
   );
+  /** Set when their role is one this form cannot express — see PositionField. */
+  const lockedRole = lockedRoleOf(worker);
   const [salaryType, setSalaryType] = useState<WorkerSalaryType>(
     worker?.salaryType === "hourly" ? "hourly" : "monthly"
   );
@@ -70,6 +215,7 @@ export const WorkerSheet = ({
     new Set(worker?.workingDays?.length ? worker.workingDays : DEFAULT_DAYS)
   );
   const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
   /**
@@ -158,18 +304,20 @@ export const WorkerSheet = ({
   const readForm = (form: HTMLFormElement): WorkerInput | null => {
     const data = new FormData(form);
     const fullname = String(data.get("fullname") ?? "").trim();
+    const phone = String(data.get("phone") ?? "").trim();
+    const missing = missingFields(fullname, phone);
 
-    if (fullname.length === 0) {
-      setNameError("Required");
+    setNameError(missing.nameError);
+    setPhoneError(missing.phoneError);
+
+    if (!missing.ok) {
       return null;
     }
 
-    setNameError(null);
-
     return {
       fullname,
-      phone: String(data.get("phone") ?? "").trim(),
-      role: position,
+      phone,
+      ...roleFieldOf(lockedRole, position),
       salaryType,
       salaryAmount: String(data.get("salaryAmount") ?? "0").trim() || "0",
       hiredAt: String(data.get("hiredAt") ?? "").trim() || null,
@@ -268,7 +416,7 @@ export const WorkerSheet = ({
           className="flex flex-1 flex-col overflow-hidden"
           onSubmit={handleSubmit}
         >
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
             <Field data-invalid={Boolean(nameError) || undefined}>
               <FieldLabel htmlFor="worker-name">
                 <span className="text-destructive">*</span>{" "}
@@ -284,44 +432,15 @@ export const WorkerSheet = ({
               {nameError ? <FieldError>{nameError}</FieldError> : null}
             </Field>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="worker-phone">
-                  {messages["workers.fieldPhone"]}
-                </FieldLabel>
-                <Input
-                  defaultValue={worker?.phone ?? "+998"}
-                  disabled={isPending}
-                  id="worker-phone"
-                  inputMode="tel"
-                  name="phone"
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="worker-position">
-                  {messages["workers.fieldPosition"]}
-                </FieldLabel>
-                <Select
-                  disabled={isPending}
-                  onValueChange={(next) => setPosition(next as WorkerPosition)}
-                  value={position}
-                >
-                  <SelectTrigger className="w-full" id="worker-position">
-                    <SelectValue placeholder={messages["workers.pickRole"]} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {WORKER_POSITIONS.map((value) => (
-                        <SelectItem key={value} value={value}>
-                          {messages[positionLabelKey(value)]}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
+            {/* A line of its own: the country picker eats the left third of
+                the control, so at half a row the number itself had less space
+                than the flag beside it. */}
+            <PhoneRow
+              disabled={isPending}
+              error={phoneError}
+              messages={messages}
+              phone={worker?.phone ?? ""}
+            />
 
             {/* Sits with the person, above the pay: their face is what clocks
                 them on, so it belongs to who they are rather than to what they
@@ -352,7 +471,7 @@ export const WorkerSheet = ({
                   return (
                     <Button
                       aria-checked={active}
-                      className={cn(active && SELECTED_FILL)}
+                      className={cn(active && SELECTED_TINT)}
                       disabled={isPending}
                       key={type}
                       onClick={() => setSalaryType(type)}
@@ -369,10 +488,35 @@ export const WorkerSheet = ({
               </div>
             </Field>
 
+            {/* Role, pay and start date: three short answers about the same
+                hire, but only TWO of them fit on a line here.
+
+                This was one row of `1fr 1fr 1.2fr`. The sheet is `max-w-lg`, so
+                the row has ~480px to give — and `1fr` is `minmax(auto, 1fr)`,
+                whose `auto` floor is the column's min-content. "Ishga qabul
+                sanasi" and the assembled date button set a floor far above a
+                1.2fr share, so the date column took what it needed and the two
+                `1fr` columns split what was left. The pay box collapsed to a
+                single clipped character. A fraction only distributes the space
+                that is actually spare.
+
+                Two columns and the date on its own row gives every control a
+                width it can render in, and matches the shift-time row below. */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field>
+              <PositionField
+                disabled={isPending}
+                lockedRole={lockedRole}
+                messages={messages}
+                onChange={setPosition}
+                value={position}
+              />
+
+              {/* `min-w-0` on each cell so a long label or value can never again
+                  push a sibling below a usable width — it overflows its own
+                  column instead of stealing from the next one. */}
+              <Field className="min-w-0">
                 <FieldLabel htmlFor="worker-salary">{salaryLabel}</FieldLabel>
-                <Input
+                <MoneyInput
                   defaultValue={
                     worker
                       ? String(Math.round(Number(worker.salaryAmount)))
@@ -380,18 +524,17 @@ export const WorkerSheet = ({
                   }
                   disabled={isPending}
                   id="worker-salary"
-                  inputMode="decimal"
                   name="salaryAmount"
                   placeholder="0"
                 />
               </Field>
 
-              <Field>
+              <Field className="min-w-0 sm:col-span-2">
                 <FieldLabel htmlFor="worker-hired">
                   {messages["workers.hireDate"]}
                 </FieldLabel>
-                <DatePicker
-                  defaultValue={worker?.hiredAt?.slice(0, 10) ?? ""}
+                <DateField
+                  defaultValue={hireDateOf(worker)}
                   disabled={isPending}
                   id="worker-hired"
                   name="hiredAt"
@@ -435,7 +578,7 @@ export const WorkerSheet = ({
                     <Button
                       aria-checked={active}
                       aria-label={messages[labelKey]}
-                      className={cn("min-w-14", active && SELECTED_FILL)}
+                      className={cn("min-w-14", active && SELECTED_TINT)}
                       disabled={isPending}
                       key={day}
                       onClick={() => toggleDay(day)}

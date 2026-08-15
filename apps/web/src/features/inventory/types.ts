@@ -2,7 +2,55 @@
 
 import type { Messages } from "@/lib/i18n/dictionary";
 
-export type StockStatus = "in" | "low" | "out";
+export const STOCK_STATUSES = ["in", "low", "out"] as const;
+
+export type StockStatus = (typeof STOCK_STATUSES)[number];
+
+/**
+ * The stat tiles double as the status filter, and "total" is the tile meaning
+ * no filter at all — so it belongs beside the three real statuses rather than
+ * being spelled `StockStatus | "total"` at every use.
+ */
+export const STOCK_FILTERS = ["total", ...STOCK_STATUSES] as const;
+
+export type StockFilter = (typeof STOCK_FILTERS)[number];
+
+/**
+ * How the stock table is ordered. `stock` is ascending, so it puts the empty
+ * and nearly-empty shelves at the top — which is why the dashboard's low-stock
+ * card links here with it rather than with a status filter: there is no single
+ * status meaning "low *or* out", and a link that showed one and hid the other
+ * would be a worse answer than the unfiltered list.
+ */
+export const STOCK_SORTS = ["name", "stock", "debt"] as const;
+
+export type StockSort = (typeof STOCK_SORTS)[number];
+
+/** The part of the stock screen another screen can hand over in a URL. */
+export interface StockSeed {
+  q: string;
+  sort: StockSort;
+  status: StockFilter;
+}
+
+/** What the stock screen opens on when the URL says nothing. */
+export const DEFAULT_STOCK_SEED: StockSeed = {
+  q: "",
+  sort: "name",
+  status: "total",
+};
+
+/**
+ * The URL, filled back out into the controls' opening values.
+ *
+ * Each field is absent-able so a link carries only what it means — `?sort=stock`
+ * rather than three parameters, two of which say "unchanged".
+ */
+export const stockSeedFrom = (search: Partial<StockSeed>): StockSeed => ({
+  q: search.q ?? DEFAULT_STOCK_SEED.q,
+  sort: search.sort ?? DEFAULT_STOCK_SEED.sort,
+  status: search.status ?? DEFAULT_STOCK_SEED.status,
+});
 
 export interface InventoryItem {
   cost: string | null;

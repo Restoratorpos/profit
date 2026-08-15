@@ -22,6 +22,19 @@ meant `db:migrate` silently creating a stray table in a live database.
   2026-07-26 for the Hikvision terminals, and modelled in `schema.ts`. A baseline
   generated from this file will therefore not match `gyms.sql`; it matches what
   is live, which is the one that counts.
+- **`orders.discount` and `memberships.discount`** went the same way on
+  2026-07-30, for discounts at the till and on a plan sale. The SQL is kept in
+  `manual/2026-07-30-discount.sql` rather than thrown away at a prompt, so the
+  next baseline can be checked against it.
+
+## Why these went in by hand
+
+`.claude/rules/migrations.md` says never hand-write a migration, and that is the
+right rule once there is a baseline. There is not one: with an empty journal
+`db:generate` emits `CREATE TABLE` for all 23 modelled tables as `0000`, and
+`db:migrate` would then try to create tables that already hold data. Until the
+baseline below exists, a targeted `ALTER` recorded in `manual/` is the honest
+path — and each one is listed above so nothing is invisible.
 
 ## Once `schema.ts` covers everything
 

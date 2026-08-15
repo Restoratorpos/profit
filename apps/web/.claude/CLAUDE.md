@@ -26,6 +26,7 @@ src/
     i18n/                locale + dictionary
     query-client.ts      cache config and persistence
     format.ts            formatMoney and friends
+    date.ts              every date a person reads
 ```
 
 **Rules that keep this from rotting:**
@@ -37,6 +38,58 @@ src/
   feature stays inside it.
 - Features do not import each other's internals. If two need the same thing, it
   belongs in `lib/` or `components/`.
+
+## Dates: `lib/date.ts`, never `Intl.DateTimeFormat`
+
+Every date a person reads goes through `lib/date.ts` — `formatDate`
+("8 mart, 2026"), `formatDay`, `formatDateTime`, `formatStamp`, `formatTime`,
+`formatMonth` — each taking the app `Locale`. Machine-shaped values use
+`toDateInput` / `isoDay` and stay `"YYYY-MM-DD"`.
+
+**Do not reach for `Intl.DateTimeFormat`.** ICU has no Uzbek month data:
+`uz-UZ` renders August as **"M08"** and puts the year first, so every screen
+showed stamps like `"2026 M08 3 08:12"`. Hard-coding `"en-GB"` to dodge that was
+the other half of the bug — English months in an Uzbek UI. The month names are a
+table in `lib/date.ts`; `__tests__/date-format.test.ts` asserts the shape.
+
+The one legitimate `Intl` date consumer is the calendar grid, which is date-fns
+locales via `components/date-field.tsx`.
+
+## Deep links: the URL seeds a screen, it does not own it
+
+`/members`, `/inventory/` and `/orders/` take search params so the dashboard's
+attention cards can open them already narrowed — `?filter=expiring`,
+`?sort=stock`, `?q=<phone>`. `/workers` is the exception and owns its range
+outright, because a date range *is* the question that screen answers.
+
+For the other three the filters stay component state and only their **opening
+values** come from the URL. Typing in a search box does not rewrite the address
+bar: a keystroke in the URL is a history entry per character, and the members
+search is debounced against a server round trip. A link is therefore
+reproducible when opened and stale the moment it is used.
+
+What that costs, and what each piece is for:
+
+- **Every field is `.optional().catch(undefined)`.** Optional keeps a bare
+  `<Link to="/inventory">` from having to name filters it does not care about —
+  making one field required makes `search` required at *every* call site to that
+  path. The `.catch` means a hand-mangled link opens the plain screen instead of
+  an error page.
+- **Free text goes through `lib/search-text.ts`, never a bare `z.string()`.**
+  The router JSON-encodes search values, so an all-digit term round-trips as
+  `q="998901234567"` — and trimming those quotes hands zod a *number*, which a
+  plain string schema rejects and `.catch` then swallows, opening the screen
+  unfiltered with nothing to say why. A phone is exactly what the dashboard
+  passes, so this is the common case.
+- **Resolve defaults in one exported helper** (`memberQueryFrom`,
+  `stockSeedFrom`, `orderSeedFrom`), so the route loader and the page derive the
+  same value and a deep link does not fetch the same page twice.
+- **Key the view on the seed.** Navigating within one route does not remount, so
+  without a `key` the sidebar's plain "A'zolar" link clears the URL while the
+  screen keeps the old filter.
+
+`__tests__/deep-links.test.ts` covers the fallbacks; `dashboard.test.tsx`
+asserts the hrefs the cards actually write.
 
 ## The router plugin will overwrite your route files
 

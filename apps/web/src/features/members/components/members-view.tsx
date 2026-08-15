@@ -31,10 +31,12 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/design-system/components/ui/table";
+import { cn } from "@repo/design-system/lib/utils";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
+  LayersIcon,
   MoreVerticalIcon,
   PencilIcon,
   PlusCircleIcon,
@@ -46,29 +48,42 @@ import { useState } from "react";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import { IdCode } from "@/components/id-code";
 import { PAGE_SIZES } from "@/components/use-pagination";
+import { type MemberOrderSummary, OrderDetailSheet } from "@/features/orders";
+import { formatDate } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { useDeleteMember, useMembersPage, useSetMemberActive } from "../api";
 import {
   DEBT_FILTERS,
-  DEFAULT_MEMBER_QUERY,
   type DebtFilter,
-  formatDay,
   hasDebt,
+  isoDay,
   type MemberFilter,
   type MemberListItem,
+  type MemberMembership,
   type MemberPage,
   type MemberQuery,
+  type MembershipState,
   type PlanOption,
 } from "../types";
+import { ManageSubscriptionDialog } from "./manage-subscription-dialog";
 import { MemberSheet } from "./member-sheet";
+import { MembershipDetailSheet } from "./membership-detail-sheet";
 
 interface MembersViewProperties {
   /** The first page, fetched by the server component so nothing flashes. */
   initial: MemberPage;
+  /** Only the shop-debt drawer needs it — it dates the orders it lists. */
+  locale: Locale;
   messages: Messages;
   plans: readonly PlanOption[];
+  /**
+   * What the URL asked for, read once as the opening filters. Later edits stay
+   * here rather than going back to the address bar — see the route.
+   */
+  seed: MemberQuery;
 }
 
 const FILTERS: readonly {
@@ -87,33 +102,190 @@ const DEBT_LABEL: Record<DebtFilter, keyof Messages> = {
   shop: "members.debtShop",
 };
 
-const DebtCell = ({ value }: { value: string }) => {
+/**
+ * A debt figure, clickable when there is a breakdown behind it.
+ *
+ * The number on its own answers "how much" and never "what for": a member owing
+ * on a gym plan and a sauna package reads as one sum, and the desk still has to
+ * ask which. Membership debt therefore opens the same panel the badges do, where
+ * the total is split back into the memberships it came from.
+ *
+ * Shop debt opens the orders screen's own pay drawer — the orders behind the
+ * figure, and the controls to settle them. That drawer rather than a panel of our
+ * own: it is the same balance over the same endpoint, so a second one here would
+ * be two screens to keep in agreement and two places to take a payment.
+ */
+const DebtCell = ({
+  onOpen,
+  value,
+}: {
+  onOpen?: () => void;
+  value: string;
+}) => {
   if (!hasDebt(value)) {
     return <span className="text-muted-foreground">—</span>;
   }
 
+  const amount = formatMoney(value);
+
+  if (!onOpen) {
+    return <span className="font-semibold text-destructive">{amount}</span>;
+  }
+
   return (
-    <span className="font-semibold text-destructive">{formatMoney(value)}</span>
+    <Button
+      className="h-auto p-0 font-semibold text-destructive"
+      onClick={onOpen}
+      variant="link"
+    >
+      {amount}
+    </Button>
   );
 };
 
-/** `3× VIP 1 MONTH` — the multiplier only appears when there is more than one. */
-const MembershipBadges = ({ member }: { member: MemberListItem }) => {
-  if (member.plans.length === 0) {
+/**
+ * How a membership's state paints.
+ *
+ * Three states, three readings — blue for in force, amber for needs attention,
+ * muted for done. Blue rather than `--primary`: the brand green is also what
+ * "selected" is made of, so a row of green badges read as a row of chosen
+ * things. Expired ones stay on the row rather than being dropped: "the gym plan
+ * ran out, the sauna is still going" is the whole picture, and hiding half of it
+ * is what the old badge did.
+ *
+ * Each state also restates its own focus colours. These badges are buttons, and
+ * `Badge`'s base carries `focus-visible:border-ring focus-visible:ring-ring/50`
+ * — `--ring` is the brand green, so the badge you clicked to open the panel got
+ * a green border drawn over its own the moment the panel closed and focus came
+ * back to it. That green was not the state's colour and did not mean anything.
+ */
+const STATE_STYLE: Record<MembershipState, string> = {
+  active:
+    "border-blue-500/40 bg-blue-500/10 text-blue-600 focus-visible:border-blue-500 focus-visible:ring-blue-500/40 dark:text-blue-400",
+  expiring:
+    "border-amber-500/40 bg-amber-500/10 text-amber-600 focus-visible:border-amber-500 focus-visible:ring-amber-500/40 dark:text-amber-400",
+  expired:
+    "border-border bg-muted text-muted-foreground line-through focus-visible:border-foreground/40 focus-visible:ring-foreground/20",
+};
+
+/**
+ * What a membership has left, in its own terms.
+ *
+ * A visit-counted package counts entries and a dated one counts days, and the
+ * two never combine — which is exactly why this is per membership rather than
+ * one number on the row.
+ */
+const remainderOf = (
+  membership: MemberMembership,
+  messages: Messages,
+  isPrimary: boolean,
+  locale: Locale
+): string | null => {
+  if (membership.state === "expired") {
+    return null;
+  }
+
+  if (membership.remainingVisits !== null) {
+    /*
+     * The first membership's sessions already have a column of their own, so
+     * repeating them in its badge says the same number twice on one row. The
+     * ones bought since have nowhere else to be counted, so they keep theirs.
+     */
+    return isPrimary
+      ? null
+      : `${membership.remainingVisits} ${messages["members.visitsShort"]}`;
+  }
+
+  return membership.endsAt ? formatDate(membership.endsAt, locale) : null;
+};
+
+/**
+ * One badge per membership, each carrying its own expiry.
+ *
+ * This replaced `3× VIP 1 MONTH`, which counted memberships and said nothing
+ * about when any of them ended — so a member holding gym, spa and sauna showed
+ * three names and no way to tell which was about to lapse.
+ */
+const MembershipBadges = ({
+  locale,
+  member,
+  messages,
+  onOpen,
+}: {
+  locale: Locale;
+  member: MemberListItem;
+  messages: Messages;
+  onOpen: () => void;
+}) => {
+  if (member.memberships.length === 0) {
     return <span className="text-muted-foreground">—</span>;
   }
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {member.plans.map((plan) => (
-        <Badge key={plan.name} variant="secondary">
-          {plan.count > 1 ? `${plan.count}× ` : ""}
-          {plan.name}
-        </Badge>
-      ))}
+      {member.memberships.map((membership, index) => {
+        // Index 0 is the plan they were signed up on — see `primaryVisits`.
+        const remainder = remainderOf(
+          membership,
+          messages,
+          index === 0,
+          locale
+        );
+
+        return (
+          <Badge
+            asChild
+            className={cn("gap-1.5", STATE_STYLE[membership.state])}
+            key={membership.id}
+            variant="outline"
+          >
+            {/* A real button, not a clickable span: it lands in the tab order
+                and answers the keyboard, which a div with an onClick does not. */}
+            <button className="cursor-pointer" onClick={onOpen} type="button">
+              <span>{membership.name || "—"}</span>
+              {remainder ? (
+                <span className="tabular-nums opacity-70">{remainder}</span>
+              ) : null}
+            </button>
+          </Badge>
+        );
+      })}
     </div>
   );
 };
+
+/**
+ * Sessions left on the membership the member was signed up on.
+ *
+ * The first one sold, not a total across all of them. Summing was the bug this
+ * screen used to have — ten gym entries plus five sauna entries read as "15",
+ * and a sauna entry will not open the gym door. Anything bought since carries
+ * its own count in its own badge.
+ */
+const primaryVisits = (member: MemberListItem): number | null =>
+  member.memberships[0]?.remainingVisits ?? null;
+
+/**
+ * A roster row as the orders drawer's own row shape.
+ *
+ * The drawer refetches the balance from `/orders/member/:id` and displays only
+ * the name off this object, so the two fields the roster cannot know — how many
+ * orders there are and when the last one was — are filled with "none" rather
+ * than guessed. `total` is the outstanding figure for the same reason: the roster
+ * carries what is owed, never what was ever spent.
+ *
+ * This adapter is what keeps the drawer untouched by having a second caller.
+ */
+const toDebtor = (member: MemberListItem): MemberOrderSummary => ({
+  id: member.id,
+  latestOrderAt: null,
+  name: member.name,
+  orderCount: 0,
+  phone: member.phone,
+  remaining: member.shopDebt,
+  total: member.shopDebt,
+  userType: "member",
+});
 
 /** Escapes a CSV cell — a name with a comma must not split into two columns. */
 const toCsvCell = (value: string | number | null): string => {
@@ -142,14 +314,23 @@ const buildCsv = (
     member.uniqueId,
     member.name,
     formatPhone(member.phone),
-    member.plans
-      .map((plan) =>
-        plan.count > 1 ? `${plan.count}x ${plan.name}` : plan.name
+    // Each membership with its own end or visits, so the export carries the
+    // same detail the row does rather than a name and a multiplier.
+    member.memberships
+      .map((membership) =>
+        [
+          membership.name,
+          membership.remainingVisits === null
+            ? isoDay(membership.endsAt)
+            : `${membership.remainingVisits}x`,
+        ]
+          .filter(Boolean)
+          .join(" ")
       )
       .join(" | "),
-    formatDay(member.startsAt),
-    formatDay(member.endsAt),
-    member.remainingVisits ?? "",
+    isoDay(member.startsAt),
+    isoDay(member.endsAt),
+    primaryVisits(member) ?? "",
     member.membershipDebt,
     member.shopDebt,
   ]);
@@ -161,12 +342,17 @@ const buildCsv = (
 
 export const MembersView = ({
   initial,
+  locale,
   messages,
   plans,
+  seed,
 }: MembersViewProperties) => {
-  const [request, setRequest] = useState<MemberQuery>(DEFAULT_MEMBER_QUERY);
+  const [request, setRequest] = useState<MemberQuery>(seed);
   const [editing, setEditing] = useState<MemberListItem | null>(null);
   const [isSheetOpen, setSheetOpen] = useState(false);
+  const [managing, setManaging] = useState<MemberListItem | null>(null);
+  const [viewing, setViewing] = useState<MemberListItem | null>(null);
+  const [viewingShop, setViewingShop] = useState<MemberListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   /*
@@ -445,34 +631,45 @@ export const MembersView = ({
                     </TableCell>
                     <TableCell className="font-medium">{member.name}</TableCell>
                     <TableCell>
+                      {/* Text, not a `tel:` link. This runs on a desk PC with
+                          no dialer, so the link offered nothing and only made
+                          the number look like something to click. */}
                       {member.phone ? (
-                        <a
-                          className="underline-offset-4 hover:underline"
-                          href={`tel:${member.phone}`}
-                        >
+                        <span className="tabular-nums">
                           {formatPhone(member.phone)}
-                        </a>
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <MembershipBadges member={member} />
+                      <MembershipBadges
+                        locale={locale}
+                        member={member}
+                        messages={messages}
+                        onOpen={() => setViewing(member)}
+                      />
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDay(member.startsAt)}
+                      {formatDate(member.startsAt, locale)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDay(member.endsAt)}
+                      {formatDate(member.endsAt, locale)}
                     </TableCell>
-                    <TableCell className="font-semibold">
-                      {member.remainingVisits ?? "—"}
-                    </TableCell>
-                    <TableCell>
-                      <DebtCell value={member.membershipDebt} />
+                    <TableCell className="font-semibold tabular-nums">
+                      {primaryVisits(member) ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <DebtCell value={member.shopDebt} />
+                      <DebtCell
+                        onOpen={() => setViewing(member)}
+                        value={member.membershipDebt}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <DebtCell
+                        onOpen={() => setViewingShop(member)}
+                        value={member.shopDebt}
+                      />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-2">
@@ -521,6 +718,14 @@ export const MembersView = ({
                               >
                                 <PencilIcon />
                                 {messages["common.edit"]}
+                              </DropdownMenuItem>
+                              {/* Adds a membership without touching the ones
+                                  they hold — several at once is ordinary. */}
+                              <DropdownMenuItem
+                                onSelect={() => setManaging(member)}
+                              >
+                                <LayersIcon />
+                                {messages["members.manageSubscription"]}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onSelect={() => handleToggleActive(member)}
@@ -608,6 +813,45 @@ export const MembersView = ({
         onOpenChange={setSheetOpen}
         open={isSheetOpen}
         plans={plans}
+      />
+
+      {/* Keyed by member so the plan, date and payment legs start clean for the
+          next person rather than carrying the last one's over. */}
+      <ManageSubscriptionDialog
+        key={managing?.id ?? "none"}
+        member={managing}
+        messages={messages}
+        onOpenChange={(open) => {
+          if (!open) {
+            setManaging(null);
+          }
+        }}
+        plans={plans}
+      />
+
+      <MembershipDetailSheet
+        member={viewing}
+        messages={messages}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewing(null);
+          }
+        }}
+      />
+
+      {/* The orders screen's drawer, unchanged, opened from here. Keyed by member
+          so the amount box and payment method start clean for the next person and
+          a part payment on one balance cannot carry over to another. */}
+      <OrderDetailSheet
+        key={viewingShop?.id ?? "none"}
+        locale={locale}
+        messages={messages}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingShop(null);
+          }
+        }}
+        summary={viewingShop ? toDebtor(viewingShop) : null}
       />
     </div>
   );

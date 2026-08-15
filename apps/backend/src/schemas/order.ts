@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { discountSchema } from "./discount.js";
 
 /**
  * How a debt is being settled at the desk. Only the money-in methods are valid
@@ -30,6 +31,15 @@ const paidMoney = z.coerce
  */
 export const payOrdersSchema = z.object({
   amount: money,
+  /**
+   * Forgiven off the outstanding balance before the payment is applied — a
+   * discount given at the counter rather than at the till, which is the ordinary
+   * case for "settle it for 400 and we'll call it square".
+   *
+   * A percentage resolves against what is actually still owed, not the original
+   * sale: the desk is discounting the balance in front of them.
+   */
+  discount: discountSchema.nullish(),
   paymentType: z.enum(ORDER_PAYMENT_TYPES),
 });
 
@@ -148,6 +158,12 @@ export const MAX_PAYMENT_LEGS = 3;
 export const createOrderSchema = z.object({
   userId: z.string().trim().max(20).nullish(),
   items: z.array(orderItemSchema).min(1, "A sale needs at least one item"),
+  /**
+   * Taken off the line totals before the payment legs are walked, so a discounted
+   * sale is settled — and owed — against the discounted figure. Omitted means no
+   * discount; the server resolves a percentage against its own subtotal.
+   */
+  discount: discountSchema.nullish(),
   /**
    * How the sale is settled, in the order the desk entered it: some cash, then
    * the rest on a card, then whatever is still short left as a debt.

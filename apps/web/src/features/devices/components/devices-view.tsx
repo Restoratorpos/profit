@@ -13,6 +13,7 @@ import { useState } from "react";
 import type { MemberListItem } from "@/features/members/types";
 import type { WorkerListItem } from "@/features/workers/types";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import {
   useDeleteDevice,
   useEnablePush,
@@ -55,6 +56,7 @@ export const DevicesView = ({
   messages,
   workers,
 }: DevicesViewProperties) => {
+  const { locale } = useLocale();
   const [editing, setEditing] = useState<DeviceView | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [managing, setManaging] = useState<DeviceView | null>(null);
@@ -259,7 +261,7 @@ export const DevicesView = ({
                   </p>
                 </div>
                 <span className="shrink-0 text-muted-foreground text-sm tabular-nums">
-                  {formatWhen(event.time)}
+                  {formatWhen(event.time, locale)}
                 </span>
               </div>
             ))}

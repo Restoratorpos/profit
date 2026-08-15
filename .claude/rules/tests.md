@@ -27,6 +27,21 @@ expect(response.status).toBe(200);
 
 Never let a unit test hit the real database: `DB_HOST` is a remote server with real data.
 
-## Frontend (apps/app)
+## Frontend (apps/web)
 
-`environment: "jsdom"`, `@testing-library/react`. Rendering a page that calls `useSession()` needs the `AuthProvider`, and one that calls `useSearchParams()` needs a `Suspense` boundary.
+`environment: "jsdom"`, `@testing-library/react` + `user-event`. Rendering
+anything that reaches the topbar needs the `AuthProvider`, and anything that
+reads the query cache needs a `QueryClientProvider`.
+
+No `globals: true` and no `jest-dom` — call `afterEach(cleanup)` yourself and
+assert on DOM properties (`input.disabled`), not `toBeInTheDocument()`.
+
+`vitest.config.mts` deliberately does **not** load `vite.config.ts`: the
+TanStack router plugin would regenerate `routeTree.gen.ts` on every run.
+
+Four suites guard bugs worth not reintroducing rather than features:
+`boot.test.tsx` (the app must render while the session check is in flight),
+`routes.test.ts` (no route is the router plugin's `Hello "/..."` scaffold),
+`layout.test.ts` (the header is fixed and exactly one thing scrolls) and
+`selected-state.test.ts` (a chosen control keeps its colour under the cursor).
+All four fail only by looking wrong, never by failing to compile.

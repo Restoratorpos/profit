@@ -1,4 +1,5 @@
 import { Button } from "@repo/design-system/components/ui/button";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { PAGE_SIZES, type Pagination } from "@/components/use-pagination";
@@ -24,14 +25,19 @@ export const TablePagination = <T,>({
         <span className="text-muted-foreground text-sm">
           {messages["common.rows"]}:
         </span>
+        {/* Tinted, not filled. Solid `default` is the paint of an action; a
+            chosen page size is a state. This is the pager every list screen
+            renders, so it moves with /orders or the two disagree. */}
         {PAGE_SIZES.map((size) => (
           <Button
             aria-pressed={pageSize === size}
-            className={cn(pageSize !== size && "text-muted-foreground")}
+            className={cn(
+              pageSize === size ? SELECTED_TINT : "text-muted-foreground"
+            )}
             key={size}
             onClick={() => pagination.setPageSize(size)}
             size="sm"
-            variant={pageSize === size ? "default" : "ghost"}
+            variant={pageSize === size ? "outline" : "ghost"}
           >
             {size}
           </Button>

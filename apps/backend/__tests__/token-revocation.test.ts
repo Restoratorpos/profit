@@ -20,6 +20,7 @@ vi.mock("../src/lib/redis.js", () => ({
       store.set(key, value);
       return Promise.resolve("OK");
     },
+    get: (key: string) => Promise.resolve(store.get(key) ?? null),
     exists: (key: string) => Promise.resolve(store.has(key) ? 1 : 0),
     del: (key: string) => Promise.resolve(store.delete(key) ? 1 : 0),
     incr: () => Promise.resolve(1),
@@ -119,25 +120,87 @@ describe("POST /auth/logout", () => {
   });
 });
 
+/** The successor record is what the grace window is made of; dropping it ends it. */
+const lapseGraceWindow = () => {
+  for (const key of store.keys()) {
+    if (key.startsWith("auth:refresh:rotated:")) {
+      store.delete(key);
+    }
+  }
+};
+
+const refresh = async (refreshToken: string) => {
+  const response = await post("/auth/refresh", { refreshToken });
+
+  return {
+    status: response.status,
+    body: (await response.json()) as { refreshToken?: string },
+  };
+};
+
 describe("POST /auth/refresh — rotation", () => {
   it("spends the presented token and issues a working replacement", async () => {
     const first = await signIn();
 
-    const refreshed = await post("/auth/refresh", { refreshToken: first });
+    const refreshed = await refresh(first);
     expect(refreshed.status).toBe(200);
 
-    const { refreshToken: second } = (await refreshed.json()) as {
-      refreshToken: string;
-    };
+    const second = refreshed.body.refreshToken;
 
-    // The old one is spent...
-    const replayed = await post("/auth/refresh", { refreshToken: first });
-    expect(replayed.status).toBe(401);
-
-    // ...and the new one carries the session forward.
     expect(second).not.toBe(first);
-    const again = await post("/auth/refresh", { refreshToken: second });
-    expect(again.status).toBe(200);
+    // The replacement carries the session forward.
+    expect((await refresh(second ?? "")).status).toBe(200);
+
+    // And once the grace window has passed, the spent one is refused.
+    lapseGraceWindow();
+    expect((await refresh(first)).status).toBe(401);
+  });
+
+  /**
+   * The bug this whole grace window exists for.
+   *
+   * Rotation revokes the presented token *here*, while its replacement travels
+   * back inside the response. A response that never arrives — the page was
+   * reloaded mid-flight, the dev server restarted, the desk's Wi-Fi dropped —
+   * therefore left the browser holding a cookie that was already dead, with no
+   * way to ever learn its successor. The session was unrecoverable, and reloading
+   * a few times in a row is enough to land in that window.
+   */
+  it("repeats the same replacement when the first answer was lost", async () => {
+    const first = await signIn();
+
+    // The answer the browser never saw.
+    const lost = await refresh(first);
+    // The next page load, still presenting the only cookie it has.
+    const retry = await refresh(first);
+
+    expect(retry.status).toBe(200);
+    expect(retry.body.refreshToken).toBe(lost.body.refreshToken);
+  });
+
+  /**
+   * Repeating must not fork the chain. Two live successors would mean a stolen
+   * token quietly running alongside the real one, which is the exact property
+   * rotation is here to deny — so the replay hands back what was already issued
+   * rather than minting more.
+   */
+  it("does not mint a second chain for a repeated exchange", async () => {
+    const first = await signIn();
+    const original = (await refresh(first)).body.refreshToken ?? "";
+
+    await refresh(first);
+    lapseGraceWindow();
+
+    // The one and only successor still works after the replays.
+    expect((await refresh(original)).status).toBe(200);
+  });
+
+  it("never replays a token that was revoked by signing out", async () => {
+    const refreshToken = await signIn();
+    await post("/auth/logout", { refreshToken });
+
+    // Sign-out records no successor, so there is nothing to hand back.
+    expect((await refresh(refreshToken)).status).toBe(401);
   });
 
   it("reports a revoked token exactly as it reports a forged one", async () => {

@@ -11,6 +11,7 @@ import type {
   MemberListItem,
   MemberPage,
   MemberQuery,
+  MemberVisit,
   PaymentType,
 } from "./types";
 
@@ -20,6 +21,12 @@ export const memberKeys = {
 };
 
 export interface MembershipInput {
+  /**
+   * What the desk took off the plan's price, as a rate or a figure — null at full
+   * price. The server resolves it against the plan's own price, so the money it
+   * came to on screen is deliberately not sent.
+   */
+  discount: { kind: "amount" | "percent"; value: number } | null;
   /**
    * How the sale is settled, in order — one leg for an ordinary sale, up to
    * three for a split. A leg with no amount takes whatever is still
@@ -98,6 +105,49 @@ export const useCreateMember = () => {
     mutationFn: (input: MemberInput) =>
       apiPost<MemberListItem>("/members", input),
     onSuccess: invalidate,
+  });
+};
+
+/**
+ * One member's recent visits, newest first.
+ *
+ * Gated on a member being chosen: this hangs off a badge in the table, and a
+ * roster of a thousand should not fetch a thousand visit histories to draw.
+ */
+export const useMemberVisits = (memberId: string | null) =>
+  useQuery({
+    queryKey: [...memberKeys.all, memberId ?? "", "visits"] as const,
+    queryFn: () => apiFetch<MemberVisit[]>(`/members/${memberId}/visits`),
+    enabled: memberId !== null,
+  });
+
+/**
+ * Sells a further membership to someone who already exists.
+ *
+ * A member can hold several at once — a gym plan, a course of massages, a sauna
+ * package — and this is also how a renewal is recorded: the same plan again,
+ * starting the day after the current one ends, stacked behind it rather than
+ * editing it.
+ *
+ * The transactions cache is invalidated too: a membership sale writes `income`
+ * rows, so the cashbox moved.
+ */
+export const useAddMembership = () => {
+  const invalidate = useInvalidateMembers();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      input,
+      memberId,
+    }: {
+      input: MembershipInput;
+      memberId: string;
+    }) => apiPost<void>(`/members/${memberId}/memberships`, input),
+    onSuccess: () => {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
   });
 };
 

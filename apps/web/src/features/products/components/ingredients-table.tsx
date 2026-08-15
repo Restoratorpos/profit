@@ -52,6 +52,7 @@ export const IngredientsTable = ({
       <TableHeader>
         <TableRow>
           <TableHead>{messages["products.colName"]}</TableHead>
+          <TableHead>{messages["products.colCategory"]}</TableHead>
           <TableHead>{messages["products.colUnit"]}</TableHead>
           <TableHead className="text-right">
             {messages["products.fieldCostPerUnit"]}
@@ -69,9 +70,18 @@ export const IngredientsTable = ({
             <TableRow key={ingredient.id}>
               <TableCell>
                 <p className="truncate font-medium">{ingredient.name}</p>
-                <p className="truncate text-muted-foreground text-sm">
-                  {ingredient.categoryName ?? messages["products.noCategory"]}
-                </p>
+              </TableCell>
+              {/* Its own column, like the products and combos tables — stacked
+                  under the name it could not be scanned down, and it read as part
+                  of the name. Uncategorised stays muted: it is the absence of a
+                  value, and as loud as a real category it makes the column
+                  harder to read than no column at all. */}
+              <TableCell
+                className={
+                  ingredient.categoryName ? undefined : "text-muted-foreground"
+                }
+              >
+                {ingredient.categoryName ?? messages["products.noCategory"]}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {ingredient.unit ?? "—"}

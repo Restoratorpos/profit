@@ -84,9 +84,15 @@ export const StockTable = ({
               <TableCell>
                 {/* The row is the control that opens the drawer, so the name is
                     the focusable thing inside it — a whole <tr> cannot take
-                    focus, and the keyboard must reach this somehow. */}
+                    focus, and the keyboard must reach this somehow.
+
+                    `text-foreground` overrides the `link` variant's green. A
+                    name is the row's subject, not an accent: every other cell
+                    beside it is plain, and a column of green made the table
+                    read as a list of links rather than of products. The
+                    underline on hover is what says it is clickable. */}
                 <Button
-                  className="h-auto justify-start truncate p-0 font-medium hover:underline"
+                  className="h-auto justify-start truncate p-0 font-medium text-foreground hover:underline"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpen(item);

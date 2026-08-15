@@ -17,9 +17,35 @@ import { isRedisAvailable, redis } from "./redis.js";
  */
 
 const PREFIX = "auth:refresh:denied:";
+const ROTATED_PREFIX = "auth:refresh:rotated:";
 
-const keyFor = (token: string): string =>
-  PREFIX + createHash("sha256").update(token).digest("hex");
+const hash = (token: string): string =>
+  createHash("sha256").update(token).digest("hex");
+
+const keyFor = (token: string): string => PREFIX + hash(token);
+
+const rotatedKeyFor = (token: string): string => ROTATED_PREFIX + hash(token);
+
+/**
+ * How long a spent refresh token keeps answering with the replacement it was
+ * already given.
+ *
+ * Rotation has a hole in it that only shows up in a browser: the token is
+ * revoked here, on the server, while its replacement travels back inside the
+ * response. Lose that response — the page is reloaded mid-flight, the dev
+ * server restarts, the Wi-Fi drops — and the cookie the browser still holds is
+ * already dead. The session is then unrecoverable: every later refresh presents
+ * the spent token and is refused, and the operator is dumped at the sign-in
+ * screen with a perfectly good session behind them. Reloading a few times in
+ * quick succession is enough to hit it, because the boot refresh is in flight
+ * for exactly the window a reload lands in.
+ *
+ * So for a minute after it is spent, a token answers with the *same* successor
+ * rather than a 401. That is what makes the refresh idempotent under a lost
+ * response, and one minute is far longer than any retry and far shorter than the
+ * 60-day token it protects.
+ */
+const ROTATION_GRACE_SECONDS = 60;
 
 /** Seconds until `expiresAt`, floored at 1 — Redis rejects a TTL of 0. */
 const ttlSeconds = (expiresAt: Date): number =>
@@ -68,5 +94,59 @@ export const isRefreshTokenDenied = async (token: string): Promise<boolean> => {
       "Refresh-token denylist unreachable — allowing the token"
     );
     return false;
+  }
+};
+
+/**
+ * Remembers what a spent token was exchanged for, so the exchange can be
+ * repeated if its answer went missing. See ROTATION_GRACE_SECONDS above.
+ *
+ * This does hold a usable credential in Redis, which the denylist above
+ * deliberately does not — and it is worth being clear about the trade. The
+ * exposure lasts a minute and buys an attacker who can already read Redis
+ * nothing they could not get by reading the sessions themselves. What it buys
+ * the front desk is that a reload during a refresh is survivable, which today it
+ * is not.
+ *
+ * Note what is *not* recorded: sign-out denylists a token without a successor,
+ * so a token the operator revoked on purpose can never be replayed through this.
+ */
+export const recordRotation = async (
+  spent: string,
+  successor: string
+): Promise<void> => {
+  if (!isRedisAvailable()) {
+    return;
+  }
+
+  try {
+    await redis.set(rotatedKeyFor(spent), successor, {
+      EX: ROTATION_GRACE_SECONDS,
+    });
+  } catch (error) {
+    // Not fatal: the rotation still happened, and the client that receives the
+    // response carries on. Only a lost response degrades to today's behaviour.
+    logger.warn(
+      { err: error },
+      "Could not record a token rotation — a lost refresh response will end the session"
+    );
+  }
+};
+
+/**
+ * The replacement a spent token was already issued, if it is still within the
+ * grace window. Null once the window has lapsed, and null for a token that was
+ * revoked by signing out rather than by rotation.
+ */
+export const successorOf = async (spent: string): Promise<string | null> => {
+  if (!isRedisAvailable()) {
+    return null;
+  }
+
+  try {
+    return await redis.get(rotatedKeyFor(spent));
+  } catch (error) {
+    logger.error({ err: error }, "Rotation record unreachable");
+    return null;
   }
 };

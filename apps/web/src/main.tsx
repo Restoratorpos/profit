@@ -6,7 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BootScreen } from "@/components/boot-screen";
+import { BootScreen, OfflineScreen } from "@/components/boot-screen";
 import { AuthProvider, useAuth } from "@/lib/auth/context";
 import { LocaleProvider } from "@/lib/i18n/provider";
 import { persister, queryClient } from "@/lib/query-client";
@@ -29,6 +29,15 @@ const RoutedApp = () => {
 
   if (auth.isRestoring) {
     return <BootScreen />;
+  }
+
+  /*
+   * Routing without a verdict is worse than not routing: the `_authed` guard
+   * reads `isAuthenticated`, which is false purely because nobody answered, and
+   * would redirect a signed-in operator to sign-in.
+   */
+  if (auth.isOffline) {
+    return <OfflineScreen onRetry={auth.retryRestore} />;
   }
 
   return (

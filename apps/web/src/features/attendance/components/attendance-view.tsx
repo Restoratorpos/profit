@@ -1,6 +1,5 @@
 import { formatPhone } from "@repo/auth/lib/countries";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Empty,
   EmptyDescription,
@@ -31,9 +30,11 @@ import {
   SearchIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateField } from "@/components/date-field";
 import { IdCode } from "@/components/id-code";
 import type { MemberListItem } from "@/features/members/types";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useAttendanceSessions,
@@ -71,6 +72,7 @@ export const AttendanceView = ({
   members,
   messages,
 }: AttendanceViewProperties) => {
+  const { locale } = useLocale();
   const initial = useMemo(() => presetRange("month"), []);
 
   const [from, setFrom] = useState(initial.from);
@@ -179,7 +181,7 @@ export const AttendanceView = ({
   };
 
   const handleExport = () => {
-    const blob = new Blob([toCsv(rows, messages)], {
+    const blob = new Blob([toCsv(rows, messages, locale)], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -215,7 +217,7 @@ export const AttendanceView = ({
         </p>
 
         <div className="flex items-center gap-2">
-          <DatePicker
+          <DateField
             aria-label={messages["attendance.today"]}
             className="w-full sm:w-44"
             onChange={(next) => {
@@ -225,7 +227,7 @@ export const AttendanceView = ({
             value={from}
           />
           <span className="hidden text-muted-foreground sm:inline">—</span>
-          <DatePicker
+          <DateField
             aria-label={messages["attendance.month"]}
             className="w-full sm:w-44"
             onChange={(next) => {
@@ -321,7 +323,7 @@ export const AttendanceView = ({
               </TableHeader>
               <TableBody>
                 {rows.map((row) => {
-                  const entry = formatEntry(row.at);
+                  const entry = formatEntry(row.at, locale);
 
                   return (
                     <TableRow key={row.memberId}>

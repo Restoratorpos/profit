@@ -16,8 +16,10 @@ import {
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { cn } from "@repo/design-system/lib/utils";
 import { HistoryIcon } from "lucide-react";
+import { formatStamp } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { useProductMovements } from "../api";
 import { formatQuantity, type InventoryItem, movementLabel } from "../types";
 
@@ -27,23 +29,6 @@ interface ProductHistorySheetProperties {
   messages: Messages;
   onOpenChange: (open: boolean) => void;
 }
-
-const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  month: "short",
-});
-
-const formatWhen = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? "—" : DATE_FORMAT.format(parsed);
-};
 
 /**
  * One product's timeline, newest first. This is the answer to the question the
@@ -55,6 +40,7 @@ export const ProductHistorySheet = ({
   messages,
   onOpenChange,
 }: ProductHistorySheetProperties) => {
+  const { locale } = useLocale();
   const productId = item?.id ?? null;
 
   /*
@@ -120,7 +106,7 @@ export const ProductHistorySheet = ({
                       {movementLabel(movement, messages)}
                     </Badge>
                     <span className="text-muted-foreground text-sm tabular-nums">
-                      {formatWhen(movement.time)}
+                      {formatStamp(movement.time, locale)}
                     </span>
                   </div>
                   {movement.supplierName || movement.workerName ? (

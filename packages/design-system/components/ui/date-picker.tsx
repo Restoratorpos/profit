@@ -1,6 +1,7 @@
 "use client";
 
 import { format, isValid, parse } from "date-fns";
+import type { Locale } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../lib/utils";
@@ -42,6 +43,16 @@ export interface DatePickerProperties {
   id?: string;
   invalid?: boolean;
   /**
+   * Which language the month names, weekday headings and the button's own label
+   * are written in — a date-fns locale, which is also what `react-day-picker`
+   * speaks. Omitted, both fall back to English.
+   *
+   * A prop rather than something read from context, because this package knows
+   * nothing about the app's i18n and must not: it is imported by two apps' worth
+   * of screens and by Storybook. `apps/web` supplies it once in `DateField`.
+   */
+  locale?: Locale;
+  /**
    * Submits the value in a hidden input so surrounding forms keep reading a
    * single named field. The same arrangement PhoneField uses.
    */
@@ -74,6 +85,7 @@ export const DatePicker = ({
   displayFormat = "dd MMM yyyy",
   id,
   invalid,
+  locale,
   name,
   onChange,
   placeholder,
@@ -114,7 +126,9 @@ export const DatePicker = ({
         >
           <CalendarIcon className="size-4 shrink-0 opacity-70" />
           <span className="truncate">
-            {selected ? format(selected, displayFormat) : (placeholder ?? "")}
+            {selected
+              ? format(selected, displayFormat, { locale })
+              : (placeholder ?? "")}
           </span>
         </Button>
       </PopoverTrigger>
@@ -125,8 +139,11 @@ export const DatePicker = ({
           // Years are reachable from the caption rather than by paging twelve
           // months at a time — a birthdate is decades back.
           captionLayout="dropdown"
+          locale={locale}
           mode="single"
           onSelect={(next) => {
+            // The wire format is never localised — it is what the API parses, and
+            // a month name in it would be a different value, not a translation.
             commit(next ? format(next, WIRE_FORMAT) : "");
             // Picking a day is the whole interaction; leaving it open would make
             // every selection cost a second dismissing tap on the terminal.

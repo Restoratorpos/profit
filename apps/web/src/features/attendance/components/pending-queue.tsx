@@ -12,7 +12,9 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type { AttendanceEventView } from "@/features/devices/types";
+import { formatTime } from "@/lib/date";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import {
   type DoorState,
   type DuplicateScan,
@@ -51,6 +53,13 @@ const ARRIVAL_MS = 10_000;
  * When a notice about `time` stops being shown, or null when there is nothing
  * to time. Measured from the scan itself, not from when this page first drew
  * it: a banner's age is the door's, so a reload cannot restart the clock.
+ *
+ * A scan is never treated as being in the future. The timestamp comes from the
+ * terminal, whose clock drifts from this machine's — the one at CHORSU runs
+ * about two and a half minutes ahead — and a future timestamp made the banner
+ * outlive its twenty seconds by exactly that drift, which reads as a notice
+ * that has stuck rather than one that is simply young. Clamping costs nothing
+ * when the clocks agree and bounds the damage when they do not.
  */
 const expiryOf = (
   time: string | null | undefined,
@@ -62,7 +71,7 @@ const expiryOf = (
 
   const at = new Date(time).getTime();
 
-  return Number.isFinite(at) ? at + life : null;
+  return Number.isFinite(at) ? Math.min(at, Date.now()) + life : null;
 };
 
 /** The soonest deadline still ahead of `now`, or null if none is. */
@@ -147,7 +156,7 @@ const doorView = (
         repeat.reason === "inside"
           ? messages["attendance.alreadyInside"]
           : messages["attendance.alreadyScanned"],
-        formatEntry(repeat.at).time,
+        formatTime(repeat.at),
         repeat.deviceName
       ),
       detailTone: "text-amber-700/90 dark:text-amber-400",
@@ -165,7 +174,7 @@ const doorView = (
         scan.direction === "out"
           ? messages["devices.directionOutShort"]
           : messages["devices.directionInShort"],
-        formatEntry(scan.time).time,
+        formatTime(scan.time),
         scan.deviceName
       ),
       detailTone: "text-muted-foreground",
@@ -282,7 +291,7 @@ const UnknownScanBanner = ({
         {messages["attendance.unknownScan"]}
       </p>
       <p className="truncate text-destructive/90 text-sm">
-        {[`ID ${scan.employeeNo}`, formatEntry(scan.at).time, scan.deviceName]
+        {[`ID ${scan.employeeNo}`, formatTime(scan.at), scan.deviceName]
           .filter(Boolean)
           .join(" · ")}
       </p>
@@ -324,6 +333,7 @@ export const PendingQueue = ({
   onDecide,
   onRemoveUnknown,
 }: PendingQueueProperties) => {
+  const { locale } = useLocale();
   const { duplicateScan, latestEvent, pending, unknownScan } = door;
 
   // Oldest first from the server, so the newest arrival is the last one.
@@ -407,7 +417,7 @@ export const PendingQueue = ({
         </div>
 
         {pending.map((decision) => {
-          const entry = formatEntry(decision.at);
+          const entry = formatEntry(decision.at, locale);
           const isDeciding = decidingId === decision.sessionId;
 
           return (

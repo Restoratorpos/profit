@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SELECTED_FILL, SELECTED_TINT } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -32,8 +32,19 @@ const designSystem = join(process.cwd(), "../../packages/design-system");
  */
 const AD_HOC_SELECTED = /border-primary bg-primary\/10/;
 
-const RESTATES_HOVER_BG = /hover:bg-/;
-const RESTATES_HOVER_TEXT = /hover:text-/;
+const RESTATES_HOVER_BG = /(?<!dark:)hover:bg-/;
+const RESTATES_HOVER_TEXT = /(?<!dark:)hover:text-/;
+
+/**
+ * The dark half of the same fight. `outline` carries `dark:bg-input/30` and
+ * `dark:hover:bg-input/50`, `ghost` carries `dark:hover:bg-accent/50`, and the
+ * `dark` variant compiles to `&:is(.dark *, …)` — `:is()` lends it the
+ * specificity of a class, so a `dark:` utility beats a plain one outright
+ * rather than merely following it. A tint declared only unprefixed loses to
+ * the variant's own dark background and vanishes in every dark theme.
+ */
+const RESTATES_DARK_BG = /dark:bg-/;
+const RESTATES_DARK_HOVER_BG = /dark:hover:bg-/;
 
 const featureFiles = readdirSync(featuresDir, {
   recursive: true,
@@ -43,24 +54,30 @@ const featureFiles = readdirSync(featuresDir, {
   .map((entry) => join(entry.parentPath, entry.name));
 
 describe("selected styles", () => {
-  it.each([
-    ["SELECTED_FILL", SELECTED_FILL],
-    ["SELECTED_TINT", SELECTED_TINT],
-  ])("%s restates its own hover colours", (_name, classes) => {
+  it("SELECTED_TINT restates its own hover colours", () => {
     /*
      * Without these, the variant's hover wins and the selection disappears
      * under the cursor. A selected thing has nowhere further to go, so its
      * hover state is itself.
      */
-    expect(classes).toMatch(RESTATES_HOVER_BG);
-    expect(classes).toMatch(RESTATES_HOVER_TEXT);
+    expect(SELECTED_TINT).toMatch(RESTATES_HOVER_BG);
+    expect(SELECTED_TINT).toMatch(RESTATES_HOVER_TEXT);
   });
 
-  it("SELECTED_FILL pairs the fill with its own foreground", () => {
-    // Never a bare `bg-selected`: the foreground is what keeps the label legible
-    // on the green, and the two ship together or not at all.
-    expect(SELECTED_FILL).toContain("bg-selected");
-    expect(SELECTED_FILL).toContain("text-selected-foreground");
+  it("SELECTED_TINT restates its colours for dark themes", () => {
+    // A plain `bg-primary/10` loses to the variant's `dark:bg-input/30` on
+    // specificity, not order — so the tint has to be declared twice or it is
+    // simply absent in the dark.
+    expect(SELECTED_TINT).toMatch(RESTATES_DARK_BG);
+    expect(SELECTED_TINT).toMatch(RESTATES_DARK_HOVER_BG);
+  });
+
+  it("SELECTED_TINT pairs the tint with a foreground that survives it", () => {
+    // `--primary` is the neon and is a fill colour; as a label on a 10% wash of
+    // itself it reads at 1.7:1. `--primary-accent` is the same green darkened
+    // to clear 4.5:1, and it is what the text must use.
+    expect(SELECTED_TINT).toContain("bg-primary/10");
+    expect(SELECTED_TINT).toContain("text-primary-accent");
   });
 
   it("finds feature files to check", () => {

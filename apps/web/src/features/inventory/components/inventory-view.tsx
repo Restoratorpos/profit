@@ -52,7 +52,9 @@ import {
   countByStatus,
   type InventoryItem,
   type StockAction,
-  type StockStatus,
+  type StockFilter,
+  type StockSeed,
+  type StockSort,
   type SupplierSummary,
 } from "../types";
 import { ProductHistorySheet } from "./product-history-sheet";
@@ -63,12 +65,16 @@ import { StockTable } from "./stock-table";
 interface InventoryViewProperties {
   messages: Messages;
   products: readonly ProductListItem[];
+  /**
+   * What the URL asked for, read once as the opening search, filter and order.
+   * Later edits stay here rather than going back to the address bar.
+   */
+  seed: StockSeed;
   stock: readonly InventoryItem[];
   suppliers: readonly SupplierSummary[];
 }
 
 type Side = "all" | "bar" | "shop" | typeof INGREDIENT_TYPE;
-type Sort = "debt" | "name" | "stock";
 
 /** The Amallar menu, in the order the desk works: goods in, then everything else. */
 const ACTIONS: { action: StockAction; icon: typeof PackageIcon }[] = [
@@ -81,13 +87,14 @@ const ACTIONS: { action: StockAction; icon: typeof PackageIcon }[] = [
 export const InventoryView = ({
   messages,
   products,
+  seed,
   stock,
   suppliers,
 }: InventoryViewProperties) => {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(seed.q);
   const [side, setSide] = useState<Side>("all");
-  const [status, setStatus] = useState<StockStatus | "total">("total");
-  const [sort, setSort] = useState<Sort>("name");
+  const [status, setStatus] = useState<StockFilter>(seed.status);
+  const [sort, setSort] = useState<StockSort>(seed.sort);
   const [action, setAction] = useState<StockAction | null>(null);
   const [opened, setOpened] = useState<InventoryItem | null>(null);
 
@@ -281,7 +288,10 @@ export const InventoryView = ({
           })}
         </div>
 
-        <Select onValueChange={(next) => setSort(next as Sort)} value={sort}>
+        <Select
+          onValueChange={(next) => setSort(next as StockSort)}
+          value={sort}
+        >
           <SelectTrigger className="w-52">
             <SelectValue />
           </SelectTrigger>

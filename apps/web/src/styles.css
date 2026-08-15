@@ -41,3 +41,26 @@ body,
 #root {
   height: 100%;
 }
+
+/*
+ * Nothing is selectable, because this is a till rather than a document.
+ *
+ * On a touchscreen a press that lingers becomes a text selection: a name turns
+ * blue, a magnifier pops up, and the tap that was meant to open a member does
+ * nothing. With a mouse the same thing happens on any drag across a table. It is
+ * the difference between an application and a web page, and the desk notices it
+ * long before it can say why.
+ *
+ * Fields are exempt: a value you cannot select is a value you cannot correct.
+ */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}

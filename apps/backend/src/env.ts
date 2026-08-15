@@ -38,9 +38,10 @@ const envSchema = z.object({
   LOGIN_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   LOGIN_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
 
-  // Shared with apps/app, which calls this API server-to-server on behalf of a
-  // signed-in user. Optional so the server still boots without it; the routes
-  // that need it refuse to serve until it is set (see middleware/service.ts).
+  // Was shared with apps/app, which called this API server-to-server on behalf
+  // of a signed-in user. **apps/app was deleted on 2026-07-29 and nothing uses
+  // this any more** — a holder of this token can name any gym via `x-gym-id`,
+  // so it should come out. See middleware/caller.ts for what removing it takes.
   SERVICE_TOKEN: z.string().min(16).optional(),
 
   // Comma-separated list of browser origins allowed to call this API.
@@ -59,10 +60,25 @@ const envSchema = z.object({
   DEVICE_SECRET: z.string().min(16).optional(),
 
   // Where the terminals should POST their events — the address *they* can reach
-  // this server on, which is a LAN address and therefore not derivable from any
-  // request the browser makes. Only used to configure the device.
+  // this server on. Only used to configure the device.
+  //
+  // Leave it unset. It is derived per terminal from the route this machine
+  // would take to reach that terminal (see lib/lan-address.ts), which is both
+  // the right network card and immune to the lease moving. Set it only to
+  // override a network where that answer is wrong — a NAT or a second subnet
+  // between the desk and the door. A value here is used verbatim and never
+  // re-checked, so a stale one silently ends attendance.
   DEVICE_CALLBACK_HOST: z.string().optional(),
   DEVICE_CALLBACK_PORT: z.coerce.number().int().positive().optional(),
+  /**
+   * Which gym's terminals this server is standing next to.
+   *
+   * Set it and every one of that gym's terminals is re-told where to push on
+   * boot, so a moved address heals itself instead of silently ending attendance.
+   * Left unset, nothing is re-applied — which is the right default for a server
+   * that is not on the same LAN as any terminal.
+   */
+  DEVICE_GYM_ID: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -89,7 +89,9 @@ function AlertDialogFooter({
   return (
     <div
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        // flex-wrap for the same reason as DialogFooter: buttons are shrink-0,
+        // so without it a pair of long labels leaves the card sideways.
+        "-mx-4 -mb-4 flex flex-col-reverse flex-wrap gap-2 rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
         className
       )}
       data-slot="alert-dialog-footer"

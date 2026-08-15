@@ -75,10 +75,42 @@ export const COUNTRIES: readonly Country[] = [
 
 export const DEFAULT_COUNTRY_CODE = "UZ";
 
+/**
+ * "Somewhere else" — for a number from a country this product does not serve.
+ *
+ * A gym's roster is local, but a member can be foreign, and a picker that
+ * cannot express their number makes the operator type it into whichever
+ * country's slot damages it least. Deliberately **not** a member of
+ * `COUNTRIES`: that list is what `formatPhone` guesses from and what
+ * `isSupportedPhone` admits at sign-in, and an entry matching everything would
+ * make both meaningless. It is offered by the picker and nowhere else.
+ *
+ * `dialCode` is empty because the operator types the country code themselves —
+ * whatever they type is the number. 15 digits is E.164's ceiling, and the
+ * groups are threes because no country's reading rhythm is known here;
+ * `formatNational` still shows whatever runs past them.
+ */
+export const CUSTOM_COUNTRY_CODE = "XX";
+
+export const CUSTOM_COUNTRY: Country = {
+  code: CUSTOM_COUNTRY_CODE,
+  name: "Other country",
+  dialCode: "",
+  nationalLength: 15,
+  groups: [3, 3, 3, 3],
+  example: "971 50 123 4567",
+};
+
+/** What the picker offers: the six served countries, then the escape hatch. */
+export const SELECTABLE_COUNTRIES: readonly Country[] = [
+  ...COUNTRIES,
+  CUSTOM_COUNTRY,
+];
+
 const FALLBACK = COUNTRIES[0] as Country;
 
 export const findCountry = (code: string): Country =>
-  COUNTRIES.find((country) => country.code === code) ?? FALLBACK;
+  SELECTABLE_COUNTRIES.find((country) => country.code === code) ?? FALLBACK;
 
 /**
  * Cleans whatever landed in the input down to the national part.
@@ -179,6 +211,44 @@ export const formatPhone = (stored: string | null | undefined): string => {
   displayCache.set(digits, formatted);
 
   return formatted;
+};
+
+/**
+ * A stored number split back into the picker's two halves — which country it
+ * belongs to, and the national digits to put in the box.
+ *
+ * The same match `formatPhone` makes, and for the same reason it is a match
+ * rather than a prefix test: a number is only claimed by a country when its
+ * length agrees too. Anything unclaimed opens as "Other country" holding all of
+ * its digits, which is how a foreign number survives being edited instead of
+ * being trimmed to fit Uzbekistan.
+ */
+export const splitPhone = (
+  stored: string | null | undefined
+): { countryCode: string; national: string } => {
+  const digits = normalizePhone(stored ?? "");
+
+  if (digits.length === 0) {
+    return { countryCode: DEFAULT_COUNTRY_CODE, national: "" };
+  }
+
+  const country = BY_DIAL_CODE_LENGTH.find(
+    (candidate) =>
+      digits.startsWith(candidate.dialCode) &&
+      digits.length === candidate.dialCode.length + candidate.nationalLength
+  );
+
+  if (!country) {
+    return {
+      countryCode: CUSTOM_COUNTRY_CODE,
+      national: digits.slice(0, CUSTOM_COUNTRY.nationalLength),
+    };
+  }
+
+  return {
+    countryCode: country.code,
+    national: digits.slice(country.dialCode.length),
+  };
 };
 
 /**

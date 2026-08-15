@@ -28,11 +28,12 @@ const routesDir = join(process.cwd(), "src/routes/_authed");
 /**
  * Routes that legitimately name no feature.
  *
- * Every vertical is ported, so this is down to the dashboard — which renders
- * nothing by design in apps/app too, because anything hardcoded there would be
- * untranslated and contradict the language switcher.
+ * Empty, and it should stay that way: every vertical is ported, the dashboard
+ * included. It is kept rather than deleted so a route that genuinely cannot name
+ * a feature has somewhere to be declared — and so that adding one is a visible
+ * decision rather than a weakened assertion.
  */
-const NOT_YET_PORTED = new Set(["index.tsx"]);
+const NOT_YET_PORTED = new Set<string>();
 
 const routeFiles = readdirSync(routesDir).filter((name) =>
   name.endsWith(".tsx")

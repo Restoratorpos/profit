@@ -3,7 +3,6 @@ import {
   SidebarProvider,
 } from "@repo/design-system/components/ui/sidebar";
 import { Outlet } from "@tanstack/react-router";
-import { BRANCH_COOKIE, PLACEHOLDER_BRANCHES } from "@/lib/branches";
 import { readDeviceCookie } from "@/lib/device-prefs";
 import { useLocale } from "@/lib/i18n/provider";
 import { AppSidebar } from "./app-sidebar";
@@ -13,13 +12,11 @@ import { Topbar } from "./topbar";
 const SIDEBAR_COOKIE = "sidebar_state";
 
 /*
- * Read once at module load rather than per render. These are device
- * preferences — they cannot change without a reload, and reading document.cookie
+ * Read once at module load rather than per render. This is a device
+ * preference — it cannot change without a reload, and reading document.cookie
  * on every render of the shell is a synchronous string parse for nothing.
  */
 const sidebarOpen = readDeviceCookie(SIDEBAR_COOKIE) !== "false";
-const activeBranchId =
-  readDeviceCookie(BRANCH_COOKIE) ?? PLACEHOLDER_BRANCHES[0].id;
 
 /**
  * The shell every signed-in route renders inside.
@@ -30,7 +27,7 @@ const activeBranchId =
  * session to check, and a guard that always passes is worse than none.
  */
 export const AppLayout = () => {
-  const { locale, messages } = useLocale();
+  const { messages } = useLocale();
 
   return (
     <SidebarProvider defaultOpen={sidebarOpen}>
@@ -43,12 +40,7 @@ export const AppLayout = () => {
        * hanging over content or a gap under the fold.
        */}
       <SidebarInset className="h-svh overflow-hidden">
-        <Topbar
-          activeBranchId={activeBranchId}
-          branches={PLACEHOLDER_BRANCHES}
-          locale={locale}
-          messages={messages}
-        />
+        <Topbar messages={messages} />
         {/*
          * The single scroll container. Every page renders inside this, so a long
          * table scrolls under a header that stays put — rather than the whole

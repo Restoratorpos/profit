@@ -1,5 +1,5 @@
+import { PhoneField } from "@repo/auth/components/phone-field";
 import { Button } from "@repo/design-system/components/ui/button";
-import { DatePicker } from "@repo/design-system/components/ui/date-picker";
 import {
   Field,
   FieldError,
@@ -24,7 +24,7 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { Textarea } from "@repo/design-system/components/ui/textarea";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -35,11 +35,21 @@ import {
   UserPlusIcon,
 } from "lucide-react";
 import { type FormEvent, useRef, useState } from "react";
+import { DateField } from "@/components/date-field";
+import { DiscountField } from "@/components/discount-field";
 import { FaceDialog } from "@/components/face-dialog";
 import { FaceField } from "@/components/face-field";
+import { MoneyInput } from "@/components/money-input";
+import {
+  type DiscountDraft,
+  discountOf,
+  emptyDiscount,
+  toDiscountRequest,
+} from "@/lib/discount";
 import { removeFace, setFace } from "@/lib/face/api";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { formatAmountInput } from "@/lib/money";
 import { type MemberInput, useCreateMember, useUpdateMember } from "../api";
 import {
   canTypeAmount,
@@ -59,7 +69,8 @@ import {
   withLeg,
 } from "../types";
 
-const NO_PLAN = "__none__";
+/** The "no plan chosen" sentinel: Radix reserves "" for "nothing selected". */
+export const NO_PLAN = "__none__";
 
 interface MemberSheetProperties {
   member?: MemberListItem | null;
@@ -163,7 +174,7 @@ const PaymentPicker = ({
         return (
           <Button
             aria-checked={active}
-            className={cn("h-20 flex-col gap-1.5", active && SELECTED_FILL)}
+            className={cn("h-20 flex-col gap-1.5", active && SELECTED_TINT)}
             disabled={disabled}
             key={option.value}
             onClick={() => onChange(option.value)}
@@ -218,12 +229,16 @@ const PersonFields = ({
           <span className="text-destructive">*</span>{" "}
           {messages["members.fieldPhone"]}
         </FieldLabel>
-        <Input
-          aria-invalid={Boolean(errors.phone)}
+        {/* Country picker + national number, submitted as one bare-digit
+            `phone` field — the same control the sign-in page uses. A member's
+            phone is how the desk finds them, so it is worth typing correctly
+            once rather than searching for three variants of it later. */}
+        <PhoneField
+          customLabel={messages["common.otherCountry"]}
           defaultValue={member?.phone ?? ""}
           disabled={disabled}
           id="member-phone"
-          inputMode="tel"
+          invalid={Boolean(errors.phone)}
           name="phone"
         />
         {errors.phone ? <FieldError>{errors.phone}</FieldError> : null}
@@ -259,7 +274,7 @@ const PersonFields = ({
       <FieldLabel htmlFor="member-birthdate">
         {messages["members.fieldBirthdate"]}
       </FieldLabel>
-      <DatePicker
+      <DateField
         defaultValue={member?.birthdate?.slice(0, 10) ?? ""}
         disabled={disabled}
         id="member-birthdate"
@@ -285,16 +300,39 @@ const PersonFields = ({
 /** What the money adds up to. Recomputed as the operator types. */
 const PaymentSummary = ({
   debt,
+  discount,
   messages,
   paid,
   total,
 }: {
   debt: number;
+  /** Money off the plan's list price, or zero when it is being sold at full. */
+  discount: number;
   messages: Messages;
   paid: number;
   total: number;
 }) => (
   <dl className="flex flex-col gap-1 rounded-xl bg-muted p-4">
+    {/* Only when something is actually off: on a full-price sale the list price
+        and the total are the same figure, and printing both says nothing twice. */}
+    {discount > 0 ? (
+      <>
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">
+            {messages["orders.subtotalLabel"]}
+          </dt>
+          <dd className="tabular-nums">
+            {formatMoney((total + discount).toFixed(2))}
+          </dd>
+        </div>
+        <div className="flex justify-between text-primary-accent">
+          <dt>{messages["orders.discountLabel"]}</dt>
+          <dd className="font-semibold tabular-nums">
+            −{formatMoney(discount.toFixed(2))}
+          </dd>
+        </div>
+      </>
+    ) : null}
     <div className="flex justify-between">
       <dt className="text-muted-foreground">
         {messages["members.totalLabel"]}
@@ -314,14 +352,19 @@ const PaymentSummary = ({
   </dl>
 );
 
-interface MembershipSectionProperties {
+export interface MembershipSectionProperties {
   /** What each leg covers, in order — the placeholders are read off this. */
   applied: readonly number[];
   debt: number;
   disabled: boolean;
+  /** What the desk has typed into the discount box, rate or figure. */
+  discount: DiscountDraft;
+  /** The money that draft comes to against this plan's price. */
+  discountTaken: number;
   /** How the sale is being settled, in order. Grows as the desk splits it. */
   legs: readonly PaymentLeg[];
   messages: Messages;
+  onDiscount: (next: DiscountDraft) => void;
   onLegAmount: (index: number, next: string) => void;
   onLegMethod: (index: number, next: PaymentType) => void;
   onLegTill: (index: number, next: Till) => void;
@@ -337,12 +380,15 @@ interface MembershipSectionProperties {
 }
 
 /** The plan being sold and how it is being paid for. */
-const MembershipSection = ({
+export const MembershipSection = ({
   applied,
   debt,
   disabled,
+  discount,
+  discountTaken,
   legs,
   messages,
+  onDiscount,
   onLegAmount,
   onLegMethod,
   onLegTill,
@@ -386,7 +432,7 @@ const MembershipSection = ({
         <FieldLabel htmlFor="member-start">
           {messages["members.fieldStartDate"]}
         </FieldLabel>
-        <DatePicker
+        <DateField
           disabled={disabled || planId === NO_PLAN}
           id="member-start"
           onChange={onStartsAt}
@@ -436,6 +482,25 @@ const MembershipSection = ({
                 value={leg.method}
               />
 
+              {/* On the first leg only, directly under the methods: the discount
+                  belongs to the sale rather than to one way of paying for it, and
+                  every figure below — each leg's placeholder, the qoldiq, what is
+                  left owing — is measured from the discounted price. */}
+              {index === 0 ? (
+                <Field>
+                  <FieldLabel htmlFor="member-discount">
+                    {messages["orders.discountLabel"]}
+                  </FieldLabel>
+                  <DiscountField
+                    disabled={disabled}
+                    id="member-discount"
+                    messages={messages}
+                    onChange={onDiscount}
+                    value={discount}
+                  />
+                </Field>
+              ) : null}
+
               <Field>
                 <FieldLabel htmlFor={`member-paid-${index}`}>
                   {messages["members.fieldPaidAmount"]}
@@ -443,18 +508,17 @@ const MembershipSection = ({
                 {/* The final leg shows the rest as a fact rather than a field:
                     there is no fourth row to carry a shortfall, so it takes
                     whatever is left and only its method is a choice. */}
-                <Input
+                <MoneyInput
                   className={cn(
                     isFixedLeg(index, leg) && "text-muted-foreground"
                   )}
                   disabled={disabled || !canTypeAmount(leg.method)}
                   id={`member-paid-${index}`}
-                  inputMode="decimal"
-                  onChange={(event) => onLegAmount(index, event.target.value)}
+                  onChange={(next) => onLegAmount(index, next)}
                   placeholder={
                     // A qarz's blank box takes nothing; a till's takes the rest.
                     canTypeAmount(leg.method) && leg.method !== "debt"
-                      ? Math.max(outstanding, 0).toFixed(2)
+                      ? formatAmountInput(String(Math.round(outstanding)))
                       : "0"
                   }
                   readOnly={isFixedLeg(index, leg)}
@@ -482,7 +546,7 @@ const MembershipSection = ({
                       return (
                         <Button
                           aria-checked={active}
-                          className={cn(active && SELECTED_FILL)}
+                          className={cn(active && SELECTED_TINT)}
                           disabled={disabled}
                           key={option.value}
                           onClick={() => onLegTill(index, option.value)}
@@ -504,6 +568,7 @@ const MembershipSection = ({
 
         <PaymentSummary
           debt={debt}
+          discount={discountTaken}
           messages={messages}
           paid={paid}
           total={total}
@@ -549,12 +614,23 @@ export const MemberSheet = ({
    * splits it, and are dropped again the moment they stop being needed.
    */
   const [legs, setLegs] = useState<PaymentLeg[]>(firstLeg);
+  /** What was typed into the discount box — a rate or a figure, as typed. */
+  const [discount, setDiscount] = useState<DiscountDraft>(emptyDiscount);
 
   const isEditing = Boolean(member);
   const selectedPlan = plans.find((plan) => plan.id === planId) ?? null;
   const listPrice = Number(selectedPlan?.price ?? 0);
 
-  const { applied, debt, paid, total } = settlementOf(listPrice, legs);
+  /*
+   * The discount comes off the plan's price before the legs are walked, so the
+   * qoldiq the desk watches is the discounted one. The server resolves it again
+   * from the plan's own price — this is what makes it visible while typing.
+   */
+  const discountTaken = discountOf(listPrice, discount);
+  const { applied, debt, paid, total } = settlementOf(
+    listPrice - discountTaken,
+    legs
+  );
   const shown = visibleLegCount(listPrice, legs);
 
   const handlePlanChange = (next: string) => {
@@ -563,6 +639,9 @@ export const MemberSheet = ({
     // against the old one would silently mean something else. A blank box is
     // "the whole price", which is what picking a plan usually means anyway.
     setLegs(firstLeg);
+    // Cleared for the same reason, and it matters more here: "20,000 off" carried
+    // onto a cheaper plan is a bigger discount than the desk agreed to.
+    setDiscount(emptyDiscount());
   };
 
   const patchLeg = (index: number, patch: Partial<PaymentLeg>) => {
@@ -607,6 +686,8 @@ export const MemberSheet = ({
                 // records: a qarz carrying a part payment becomes that payment
                 // plus the balance behind it.
                 payments: toPayments(legs.slice(0, shown)),
+                // The rate or figure as entered; the server resolves the money.
+                discount: toDiscountRequest(discount),
               },
       });
 
@@ -753,7 +834,7 @@ export const MemberSheet = ({
           onSubmit={handleSubmit}
           ref={formRef}
         >
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
             <PersonFields
               disabled={isPending}
               errors={fieldErrors}
@@ -790,8 +871,11 @@ export const MemberSheet = ({
                 applied={applied}
                 debt={debt}
                 disabled={isPending}
+                discount={discount}
+                discountTaken={discountTaken}
                 legs={legs}
                 messages={messages}
+                onDiscount={setDiscount}
                 onLegAmount={(index, next) => patchLeg(index, { amount: next })}
                 onLegMethod={(index, next) => patchLeg(index, { method: next })}
                 onLegTill={(index, next) => patchLeg(index, { till: next })}

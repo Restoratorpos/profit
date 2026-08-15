@@ -1,10 +1,14 @@
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { getRouteApi } from "@tanstack/react-router";
 import { useProducts } from "@/features/products";
 import { useLocale } from "@/lib/i18n/provider";
 import { useMovements, useStock, useSuppliers } from "../api";
+import { stockSeedFrom } from "../types";
 import { HistoryView } from "./history-view";
 import { InventoryView } from "./inventory-view";
 import { SuppliersView } from "./suppliers-view";
+
+const stockRoute = getRouteApi("/_authed/inventory/");
 
 /**
  * The three inventory screens: stock, its movement history, and the suppliers
@@ -36,6 +40,7 @@ const Loading = ({ label }: { label: string }) => (
 
 export const InventoryPage = () => {
   const { messages } = useLocale();
+  const seed = stockSeedFrom(stockRoute.useSearch());
   const stock = useStock();
   const suppliers = useSuppliers();
   const products = useProducts();
@@ -51,9 +56,12 @@ export const InventoryPage = () => {
   }
 
   return (
+    // Keyed by the seed so a change of URL re-applies it — see MembersPage.
     <InventoryView
+      key={`${seed.q}|${seed.sort}|${seed.status}`}
       messages={messages}
       products={products.data}
+      seed={seed}
       stock={stock.data}
       suppliers={suppliers.data}
     />

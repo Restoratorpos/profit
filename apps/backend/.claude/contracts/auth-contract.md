@@ -48,9 +48,22 @@ Feature Route" in `api-contract.md`.
 
 - **They rotate.** `/auth/refresh` revokes the token it was handed before
   issuing the next pair, so a replay is a 401 rather than a second live session.
+- **Rotation has a one-minute grace window**, and removing it reintroduces a bug
+  that signed operators out for real. Revocation happens on the server while the
+  replacement travels back in the response: lose that response — a reload
+  mid-flight, a restarting dev server, a dropped packet — and the browser is left
+  holding a cookie that is already dead, with no way to learn its successor. So
+  for `ROTATION_GRACE_SECONDS` after being spent, a token answers with the *same*
+  replacement instead of a 401, which makes the endpoint idempotent for as long
+  as a retry takes. Handing back the one already issued rather than minting
+  another is what keeps the chain single — two live chains would let a stolen
+  token run silently alongside the real one.
 - **Revocation is a Redis denylist** (`lib/token-denylist.ts`), keyed by
   SHA-256 of the token and expiring exactly when the token would have. Tokens
-  are never stored whole: a dump of Redis must not hand out credentials.
+  are never stored whole: a dump of Redis must not hand out credentials. The one
+  exception is the grace window's successor record, which does hold a usable
+  token — for sixty seconds, under a hashed key, and never for a token revoked by
+  signing out, since `logout` records no successor.
 - **The denylist fails open.** An unreachable Redis answers "not revoked",
   because the alternative signs out every operator at once mid-shift. The
   exposure is bounded — access tokens last minutes — and it matches `index.ts`

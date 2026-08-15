@@ -19,6 +19,10 @@ const src = join(process.cwd(), "src");
 const PAGE_COMPONENT = /-(view|page|composer)\.tsx$/;
 const SCROLLS_ITSELF = /overflow-y-auto|overflow-auto/;
 const FILLS_VIEWPORT = /\bh-(screen|svh|full)\b/;
+const TSX_FILE = /\.tsx$/;
+const PANEL_COMPONENT = /sheet|dialog/;
+const CLASS_ATTRIBUTE = /class[nN]ame="[^"]*"/g;
+const GROWS_TO_FILL = /\bflex-1\b/;
 
 const read = (path: string) => readFileSync(join(src, path), "utf8");
 
@@ -69,6 +73,73 @@ describe("app shell", () => {
   });
 });
 
+describe("sidebar", () => {
+  const source = readFileSync(
+    join(
+      process.cwd(),
+      "../../packages/design-system/components/ui/sidebar.tsx"
+    ),
+    "utf8"
+  );
+
+  it("scrolls the nav when it outgrows a short viewport", () => {
+    expect(source).toContain("min-h-0 flex-1 flex-col gap-0 overflow-y-auto");
+  });
+
+  it("keeps scrolling while collapsed to icons", () => {
+    /*
+     * It used to clip both axes there. The intent was only to stop the labels
+     * sliding out sideways, but `overflow-hidden` took the vertical scroll with
+     * it, so on a short screen the last destinations were unreachable in icon
+     * mode — visible in the expanded width and gone in the narrow one.
+     */
+    expect(source).toContain("group-data-[collapsible=icon]:overflow-x-hidden");
+    expect(source).not.toContain(
+      "group-data-[collapsible=icon]:overflow-hidden"
+    );
+  });
+
+  it("anchors the header and footer so the nav is what scrolls", () => {
+    // Without `shrink-0` a flex child shrinks by default, so a short viewport
+    // squeezed the brand and the footer instead of scrolling between them.
+    expect(source).toContain('cn("flex shrink-0 flex-col gap-2 p-2"');
+  });
+});
+
+/**
+ * A dialog footer has to be able to wrap.
+ *
+ * Buttons are `shrink-0` and `whitespace-nowrap` on purpose — a touch target
+ * that shrinks under a long label stops being one — so a footer laid out as a
+ * single non-wrapping row has nowhere to put an action that does not fit and
+ * pushes it out through the side of the card. Three buttons and a translated
+ * label is enough: the face dialog's footer measured about 550px inside a 448px
+ * dialog, and the overflow was drawn floating past the edge.
+ *
+ * Nothing catches it — the classes are valid, every build passes, and it only
+ * appears in the language with the longest words.
+ */
+describe("dialog footers", () => {
+  const ui = join(process.cwd(), "../../packages/design-system/components/ui");
+
+  it.each([
+    "dialog.tsx",
+    "alert-dialog.tsx",
+  ])("%s wraps rather than overflowing", (file) => {
+    const source = readFileSync(join(ui, file), "utf8");
+
+    expect(source).toContain("flex flex-col-reverse flex-wrap");
+  });
+
+  it("follows the card's rounded corners where it bleeds to the edge", () => {
+    // The -mx/-mb bleed paints the bar over the corners the content rounds.
+    const source = readFileSync(join(ui, "dialog.tsx"), "utf8");
+
+    expect(source).toContain("-mx-4 -mb-4");
+    expect(source).toContain("rounded-b-lg");
+  });
+});
+
 describe("pages", () => {
   it("finds page components to check", () => {
     expect(pageComponents.length).toBeGreaterThan(10);
@@ -86,5 +157,44 @@ describe("pages", () => {
      */
     expect(source).not.toMatch(SCROLLS_ITSELF);
     expect(source).not.toMatch(FILLS_VIEWPORT);
+  });
+});
+
+/**
+ * The same `min-h-0` rule the shell follows, inside every panel.
+ *
+ * A sheet is a full-height flex column: a header, something that scrolls, and
+ * usually a footer carrying the button the panel exists for. `flex-1` alone
+ * leaves `min-height: auto`, so the scrolling child cannot shrink below its own
+ * content — the column grows past the viewport instead, and the footer is pushed
+ * off the bottom of the screen. On a tall display nothing looks wrong; on a 500px
+ * laptop the Saqlash and To'lash buttons are simply unreachable, with no
+ * scrollbar to explain why.
+ */
+const panels = readdirSync(join(src, "features"), {
+  recursive: true,
+  withFileTypes: true,
+})
+  .filter(
+    (entry) =>
+      entry.isFile() &&
+      TSX_FILE.test(entry.name) &&
+      PANEL_COMPONENT.test(entry.name)
+  )
+  .map((entry) => join(entry.parentPath, entry.name));
+
+describe("panels", () => {
+  it("finds sheets and dialogs to check", () => {
+    expect(panels.length).toBeGreaterThan(5);
+  });
+
+  it.each(panels)("%s can shrink what it scrolls", (path) => {
+    const source = readFileSync(path, "utf8");
+
+    for (const className of source.match(CLASS_ATTRIBUTE) ?? []) {
+      if (SCROLLS_ITSELF.test(className) && GROWS_TO_FILL.test(className)) {
+        expect(className).toContain("min-h-0");
+      }
+    }
   });
 });

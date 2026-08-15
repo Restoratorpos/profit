@@ -35,7 +35,7 @@ export const LanguageSwitcher = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          aria-label={messages["topbar.language"]}
+          aria-label={messages["settings.language"]}
           className="h-8 gap-1 px-2 font-normal"
           size="sm"
           variant="ghost"
@@ -45,7 +45,7 @@ export const LanguageSwitcher = ({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
-        <DropdownMenuLabel>{messages["topbar.language"]}</DropdownMenuLabel>
+        <DropdownMenuLabel>{messages["settings.language"]}</DropdownMenuLabel>
         <DropdownMenuGroup>
           {LOCALES.map((entry) => (
             <DropdownMenuItem

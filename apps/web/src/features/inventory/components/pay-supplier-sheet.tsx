@@ -4,7 +4,6 @@ import {
 } from "@repo/design-system/components/ui/alert";
 import { Button } from "@repo/design-system/components/ui/button";
 import { Field, FieldLabel } from "@repo/design-system/components/ui/field";
-import { Input } from "@repo/design-system/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -23,6 +22,7 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { type FormEvent, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { usePaySupplier } from "../api";
@@ -121,12 +121,7 @@ export const PaySupplierSheet = ({
               <FieldLabel htmlFor="pay-amount">
                 {messages["suppliers.payAmount"]} *
               </FieldLabel>
-              <Input
-                id="pay-amount"
-                inputMode="decimal"
-                onChange={(event) => setAmount(event.target.value)}
-                value={amount}
-              />
+              <MoneyInput id="pay-amount" onChange={setAmount} value={amount} />
             </Field>
 
             {/* Paying the lot is the common case, so it is one tap rather than

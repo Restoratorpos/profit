@@ -32,7 +32,15 @@
     "parse5": "^7.2.1"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["bcrypt", "esbuild"]
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "electron",
+      "esbuild"
+    ],
+    "overrides": {
+      "@types/react": "19.2.14",
+      "@types/react-dom": "19.2.3"
+    }
   },
   "type": "module"
 }

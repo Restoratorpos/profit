@@ -497,8 +497,11 @@ export const FaceDialog = ({
           </div>
         ) : null}
 
-        <DialogFooter className="sm:justify-between">
-          <div className="flex items-center gap-2">
+        <DialogFooter>
+          {/* Wraps as its own group, so the two secondary actions break onto a
+              second line together rather than one of them being stranded beside
+              Skip. */}
+          <div className="flex flex-wrap items-center gap-2">
             {personId ? (
               <Button
                 disabled={isBusy}
@@ -532,8 +535,14 @@ export const FaceDialog = ({
           </div>
 
           {/* Skip until a face lands, then Done — the same button, saying what
-              leaving actually means at that moment. */}
+              leaving actually means at that moment.
+
+              `sm:ml-auto` rather than the footer's `justify-between`: it keeps
+              this hard right whether it shares the row with the pair above or
+              wraps below them, and it stays out of the way on mobile, where the
+              footer is a column of full-width buttons. */}
           <Button
+            className="sm:ml-auto"
             onClick={() => onOpenChange(false)}
             type="button"
             variant={hasCaptured ? "default" : "ghost"}

@@ -9,7 +9,10 @@ import {
 } from "@repo/design-system/components/ui/sheet";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
 import { UsersIcon } from "lucide-react";
+import { formatDate } from "@/lib/date";
+import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { usePlanMembers } from "../api";
 import type { PlanMember } from "../types";
 
@@ -21,27 +24,12 @@ interface PlanMembersSheetProperties {
   planName: string;
 }
 
-/** Dates arrive as ISO strings; only the day matters at the desk. */
-const formatDate = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat("ru-RU", { dateStyle: "short" }).format(
-    parsed
-  );
-};
-
 const MemberRow = ({
+  locale,
   member,
   messages,
 }: {
+  locale: Locale;
   member: PlanMember;
   messages: Messages;
 }) => (
@@ -57,21 +45,25 @@ const MemberRow = ({
       ) : null}
     </div>
 
-    {/* A phone number is the one thing the desk actually needs to act on, so
-        it is a tel: link rather than plain text — one tap to call. */}
-    {member.phone ? (
-      <a
-        className="w-fit text-primary-accent underline-offset-4 hover:underline"
-        href={`tel:${member.phone}`}
-      >
-        {formatPhone(member.phone)}
-      </a>
-    ) : null}
-
     <dl className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+      {/* Labelled like the two facts under it. A bare string of digits under a
+          name is read as an ID as readily as a phone number — this row already
+          carries both kinds of number elsewhere in the app.
+
+          Plain text, not a `tel:` link: this is read on a desk PC with no dialer
+          behind it, so the link went nowhere and made the number look clickable.
+          `members.colPhone` rather than a fourth copy of the word "Telefon". */}
+      {member.phone ? (
+        <div className="flex gap-2">
+          <dt>{messages["members.colPhone"]}:</dt>
+          <dd className="text-foreground tabular-nums">
+            {formatPhone(member.phone)}
+          </dd>
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <dt>{messages["plans.memberEnds"]}:</dt>
-        <dd className="text-foreground">{formatDate(member.endsAt)}</dd>
+        <dd className="text-foreground">{formatDate(member.endsAt, locale)}</dd>
       </div>
       {member.remainingVisits === null ? null : (
         <div className="flex gap-2">
@@ -90,6 +82,8 @@ export const PlanMembersSheet = ({
   planId,
   planName,
 }: PlanMembersSheetProperties) => {
+  const { locale } = useLocale();
+
   /*
    * Replaces a hand-rolled effect that fetched on open and carried an `active`
    * flag so a late response from a previously opened plan could not overwrite
@@ -111,7 +105,7 @@ export const PlanMembersSheet = ({
           <SheetDescription>{planName}</SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           {error ? (
             <p
               className="rounded-lg border-2 border-destructive/50 bg-destructive/10 px-4 py-3 font-medium text-destructive"
@@ -141,6 +135,7 @@ export const PlanMembersSheet = ({
               {members.map((member) => (
                 <MemberRow
                   key={member.membershipId}
+                  locale={locale}
                   member={member}
                   messages={messages}
                 />

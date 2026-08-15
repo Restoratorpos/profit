@@ -31,34 +31,47 @@
   --popover: #ffffff;
   --popover-foreground: #0a0a0a;
   /* ── ProFit green ──
-     Two tones, because one cannot do both jobs on a white canvas.
+     ONE tone. #2ee87f is the brand green and it is used as itself everywhere —
+     as a fill under near-black (buttons, the active nav pill, selected days,
+     the logo tile) and as text (prices, links, avatar initials, the `Fit` in
+     the wordmark).
 
-     --primary is the neon, and it is a FILL: buttons, badges, selected days,
-     the logo tile. Near-black sits on it at 9.2:1. As text on white it would be
-     1.6:1, so it is never used that way.
+     This used to be two tones. --primary-accent was a darkened #0aa352, kept
+     only for text, because the neon on white measures 1.6:1 — below every
+     contrast bar there is. The two greens were close enough to read as one
+     colour in isolation and visibly different side by side, which is how they
+     were noticed: the same "selected" idea arriving in two shades on one
+     screen. The desk chose one green over the readable pair on 2026-08-05,
+     knowing the trade.
 
-     --primary-accent is the same green, only as dark as it has to be to be read
-     as TEXT on white — prices, links, avatar initials, the `Fit` in the
-     wordmark. It sits at 3.3:1, which clears AA for the large/semibold type it
-     is actually used on. It is deliberately close to the neon rather than a
-     safe forest green: two greens that read as one colour is the point.
+     What that costs, so nobody re-derives it from scratch: green text on the
+     white canvas is now 1.6:1 and is genuinely hard to read, worst on the
+     terminal under gym lighting. If that becomes a complaint, the fix is to
+     put --primary-accent back to #0aa352 HERE and in .pure-light — every
+     consumer already reads the token rather than a literal, so it is a
+     two-line reversal, not a sweep.
 
-     Anything that can be a fill should use --primary and take
-     --primary-foreground on top, which is both brighter and higher contrast. */
+     --primary-accent is kept as a name rather than deleted so that reversal
+     stays two lines, and so "text green" and "fill green" remain separable
+     ideas even while they hold the same value. */
   --primary: #2ee87f;
   --primary-foreground: #052e16;
-  --primary-accent: #0aa352;
+  --primary-accent: #2ee87f;
   /* ── Selected ──
      The one pairing for "this is the chosen one": an active nav item, the
      picked option in a segmented control, a selected row. It is a FILL, so it
      always carries --selected-foreground and never needs a hover colour — a
      thing that is already chosen has nowhere further to go.
 
-     The deep green rather than the neon, because on a white canvas this is the
-     pairing that can be white-on-green: #ffffff clears 3.3:1 here, the same bar
-     --primary-accent is held to, while on the neon it would be 1.7:1. */
-  --selected: #0aa352;
-  --selected-foreground: #ffffff;
+     The neon, matching --primary, because the sidebar's active row is the
+     reference for what "selected" looks like and it is filled with --primary.
+     While this was #0aa352 the sub-rows of that same sidebar came out a
+     different green from the rows above them.
+
+     The foreground flips with it: white on the neon is 1.7:1, so a filled
+     selection carries the same near-black --primary-foreground does at 9.2:1. */
+  --selected: #2ee87f;
+  --selected-foreground: #052e16;
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f5f5f5;
@@ -75,15 +88,34 @@
   --border: #d4d4d4;
   --input: #b8b8b8;
   --ring: #0aa352;
-  --chart-1: #f54900;
-  --chart-2: #009689;
-  --chart-3: #104e64;
-  --chart-4: #ffb900;
-  --chart-5: #fe9a00;
+  /* ── Chart series ──
+     Five hues in a FIXED order. The order is the colour-blindness mechanism,
+     not a mood: it was chosen so that every pair a chart can put side by side
+     stays apart under protanopia and deuteranopia, and re-ordering the slots
+     silently breaks that. Assign slot 1, then 2, then 3 — never cycle, never
+     generate a sixth.
+
+     The dark theme below carries the SAME five hues, stepped for a dark
+     surface, so a series keeps its identity when the operator flips the theme.
+     shadcn's defaults did not: they were five unrelated hues per mode, so
+     "memberships" was orange in the light theme and blue in the dark one.
+
+     Three of these sit below 3:1 on white by design — a chart using them owes
+     the reader a second way to get the number (a visible label, or a table
+     view). /dashboard ships the table view. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
   --sidebar: #f3f3f3;
   --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #0aa352;
-  --sidebar-primary-foreground: #ffffff;
+  /* The one green, near-black on it — the same pairing --primary carries. The
+     rings below stay the deep green on purpose: a focus indicator is not a
+     selected state, and it is the one place the extra contrast still earns
+     its keep. */
+  --sidebar-primary: #2ee87f;
+  --sidebar-primary-foreground: #052e16;
   --sidebar-accent: #eeeeee;
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e2e2e2;
@@ -128,11 +160,13 @@
   --border: oklch(1 0 0 / 18%);
   --input: oklch(1 0 0 / 28%);
   --ring: #2ee87f;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  /* The light theme's five hues, re-stepped for this canvas — same order, same
+     identity, and all five clear 3:1 against `--card` here. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
   --sidebar: #1e1e1e;
   --sidebar-foreground: #f5f5f4;
   --sidebar-primary: #2ee87f;
@@ -154,9 +188,10 @@
   --popover-foreground: #0a0a0a;
   --primary: #2ee87f;
   --primary-foreground: #052e16;
-  --primary-accent: #0aa352;
-  --selected: #0aa352;
-  --selected-foreground: #ffffff;
+  /* One green, as in :root — see the note there for what it trades away. */
+  --primary-accent: #2ee87f;
+  --selected: #2ee87f;
+  --selected-foreground: #052e16;
   --secondary: #f5f5f5;
   --secondary-foreground: #171717;
   --muted: #f2f2f2;
@@ -170,8 +205,8 @@
   --ring: #0aa352;
   --sidebar: #eeeeee;
   --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #0aa352;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary: #2ee87f;
+  --sidebar-primary-foreground: #052e16;
   --sidebar-accent: #e9e9e9;
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #dedede;
@@ -201,6 +236,13 @@
   --border: #454955;
   --input: #545967;
   --ring: #2ee87f;
+  /* The dark steps, like `.dark`. Without these the theme would inherit the
+     light ones from `:root` and paint a chart for a white page onto a navy one. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
   --sidebar: #252930;
   --sidebar-foreground: #e0ddd5;
   --sidebar-primary: #2ee87f;
@@ -234,6 +276,12 @@
   --border: #4a4743;
   --input: #5a5651;
   --ring: #2ee87f;
+  /* As in `.magic-blue` — the dark steps, not `:root`'s light ones. */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
   --sidebar: #282624;
   --sidebar-foreground: #ddd9d0;
   --sidebar-primary: #2ee87f;
@@ -411,8 +459,21 @@
   }
 } */
 
-* {
-  border-color: var(--border);
+/* The default border colour, so a bare `border` is the theme's rule rather than
+   v4's `currentColor`.
+
+   It MUST stay inside `@layer base`. Unlayered, it beat every `border-*` colour
+   utility in the app — utilities are emitted into `@layer utilities`, and an
+   unlayered rule wins over a layered one outright, with specificity never
+   entering into it. Nothing looked broken: a `*` selector is as weak as a
+   selector gets, so the classes read as if they must be working, and the only
+   symptom was that no border ever took a colour. `border-l-primary` on the
+   orders rows and `border-primary/50` in SELECTED_TINT were both silently
+   dead. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 /* Force light color-scheme to prevent browser canvas color mismatch
@@ -490,10 +551,13 @@ body::after {
   display: none;
 }
 
-/* Selection — warm amber tint */
-::selection {
-  background: #5a4530;
-}
+/* Text selection is deliberately NOT themed — the browser's own highlight is.
+   The override here was a flat `background: #5a4530` with no foreground to go
+   with it, so a dark warm brown landed under near-black input text and read as
+   a smear rather than a selection. A replacement needs both halves and needs to
+   hold up on white and on the four dark themes; until then the UA default wins,
+   which is legible on all of them and is what people expect a selection to
+   look like. Do not add a bare `background` back. */
 
 /* Focus ring - VS Code style (exclude Radix menu items — they use focus:bg-accent)
 :focus-visible:not([data-slot="dropdown-menu-item"]):not(

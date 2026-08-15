@@ -21,10 +21,14 @@ const renderProbe = async () => {
   const { AuthProvider, useAuth } = await import("@/lib/auth/context");
 
   const Probe = () => {
-    const { isRestoring, isAuthenticated } = useAuth();
+    const { isRestoring, isOffline, isAuthenticated } = useAuth();
 
     if (isRestoring) {
       return <output>restoring</output>;
+    }
+
+    if (isOffline) {
+      return <output>offline</output>;
     }
 
     return <output>{isAuthenticated ? "signed-in" : "signed-out"}</output>;
@@ -79,7 +83,13 @@ describe("boot session restore", () => {
     await waitFor(() => expect(screen.getByText("signed-out")).toBeDefined());
   });
 
-  it("settles to signed-out when the backend is unreachable", async () => {
+  /**
+   * An unreachable backend is not a signed-out operator, and saying it is was
+   * half of why reloading a few times dumped people at the sign-in screen.
+   * `tsx watch` restarts the API on every save; the desk's Wi-Fi drops packets.
+   * Neither is a statement about the session, so neither may end one.
+   */
+  it("settles to offline, not signed-out, when the backend is unreachable", async () => {
     // Not a 401 — a rejected fetch, which is what an unreachable proxy gives.
     vi.stubGlobal(
       "fetch",
@@ -88,7 +98,46 @@ describe("boot session restore", () => {
 
     await renderProbe();
 
-    await waitFor(() => expect(screen.getByText("signed-out")).toBeDefined());
+    await waitFor(() => expect(screen.getByText("offline")).toBeDefined(), {
+      timeout: 5000,
+    });
+  });
+
+  it("rides out a blip that clears before the retries run out", async () => {
+    let attempts = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        attempts += 1;
+
+        // The API was mid-restart for the first call and answers the second.
+        return attempts === 1
+          ? Promise.reject(new Error("ECONNREFUSED"))
+          : Promise.resolve(
+              jsonResponse(
+                {
+                  accessToken: "fresh",
+                  user: {
+                    id: "wkr_1",
+                    phone: "998907661770",
+                    name: "Owner",
+                    role: "owner",
+                    gymId: "gym_1",
+                    branchId: "brn_1",
+                  },
+                },
+                200
+              )
+            );
+      })
+    );
+
+    await renderProbe();
+
+    await waitFor(() => expect(screen.getByText("signed-in")).toBeDefined(), {
+      timeout: 5000,
+    });
   });
 
   it("adopts the session when the refresh cookie is still good", async () => {

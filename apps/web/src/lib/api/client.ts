@@ -1,5 +1,9 @@
 import { type Session, sessionSchema } from "@/lib/auth/session";
-import { getAccessToken, setAccessToken } from "@/lib/auth/tokens";
+import {
+  getAccessToken,
+  setAccessToken,
+  tokenGeneration,
+} from "@/lib/auth/tokens";
 
 /**
  * The transport every feature calls the API through.
@@ -87,9 +91,59 @@ export const request = (
  * several requests 401 at once (which is the normal case, since a dashboard
  * fires many queries together) they must all wait on one refresh.
  */
-let refreshInFlight: Promise<Session | null> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
 
-export const refreshSession = (): Promise<Session | null> => {
+/**
+ * The two ways a refresh can fail, which are not the same thing.
+ *
+ * `rejected` is a verdict: the server read the cookie and said no — expired,
+ * rotated away, or the account is gone. The session is genuinely over.
+ *
+ * `unavailable` is the absence of a verdict: the request never completed. A
+ * timeout, a dropped connection, a 502 from the dev proxy, or the API restarting
+ * mid-flight. Nothing was learned about the session, so nothing should be
+ * concluded about it.
+ */
+type RefreshFailure = "rejected" | "unavailable";
+
+/**
+ * What a refresh attempt actually established, which is more than "did it work".
+ *
+ * The two failures are not interchangeable and the caller decides what to do
+ * about each: a rejection is final and means signing out, while an unanswered
+ * request means try again in a moment. Collapsing them to `null` is what turned
+ * a restarting dev server into a sign-out — the boot path had no way to tell
+ * "you have no session" from "I could not ask".
+ */
+export type RefreshOutcome =
+  | { status: "ok"; session: Session }
+  | { status: RefreshFailure };
+
+/**
+ * Whether a failed refresh means the session is over.
+ *
+ * Only the server actually rejecting the credential does. Treating every
+ * failure as a rejection is what signed people out constantly in development:
+ * `tsx watch` restarts the API on every save, so any request in flight at that
+ * moment failed at the transport, cleared the token, and dropped the session —
+ * with no bad credential anywhere in sight.
+ */
+const failureOf = (response: Response): RefreshFailure =>
+  response.status === 401 || response.status === 403
+    ? "rejected"
+    : "unavailable";
+
+/** Ends the session locally. Signed-out UI and an empty cache follow from this. */
+const endSession = (failure: RefreshFailure): RefreshOutcome => {
+  if (failure === "rejected") {
+    setAccessToken(null);
+  }
+
+  return { status: failure };
+};
+
+/** The refresh, with the reason it failed intact. Single-flighted. */
+export const attemptRefresh = (): Promise<RefreshOutcome> => {
   refreshInFlight ??= (async () => {
     try {
       // Body is empty: the refresh token travels as the cookie.
@@ -99,23 +153,51 @@ export const refreshSession = (): Promise<Session | null> => {
       });
 
       if (!response.ok) {
-        setAccessToken(null);
-        return null;
+        return endSession(failureOf(response));
       }
 
       const session = sessionSchema.parse(await response.json());
       setAccessToken(session.accessToken);
 
-      return session;
+      return { status: "ok", session };
     } catch {
-      setAccessToken(null);
-      return null;
+      /*
+       * A throw here is a transport failure or an unreadable body — never a
+       * verdict, because a verdict arrives as a status code. The caller's
+       * request fails and the UI shows an error, but the session survives to be
+       * retried on the next interaction.
+       */
+      return endSession("unavailable");
     } finally {
       refreshInFlight = null;
     }
   })();
 
   return refreshInFlight;
+};
+
+/** The same thing for callers that only need "did I end up with a session?". */
+export const refreshSession = async (): Promise<Session | null> => {
+  const outcome = await attemptRefresh();
+
+  return outcome.status === "ok" ? outcome.session : null;
+};
+
+/**
+ * Gets hold of a usable token after a 401, or reports that there is none.
+ *
+ * A 401 does not always mean the token expired — it also happens to a request
+ * that was already in flight when someone else renewed it. That request is
+ * simply stale, and refreshing on its behalf would spend a second refresh token
+ * to learn what the app already knows. The generation captured before the
+ * request tells the two apart.
+ */
+const renewedSince = async (generation: number): Promise<boolean> => {
+  if (tokenGeneration() !== generation) {
+    return getAccessToken() !== null;
+  }
+
+  return (await attemptRefresh()).status === "ok";
 };
 
 /**
@@ -129,12 +211,11 @@ export const apiFetch = async <T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> => {
+  const generation = tokenGeneration();
   let response = await request(path, init);
 
   if (response.status === 401) {
-    const session = await refreshSession();
-
-    if (!session) {
+    if (!(await renewedSince(generation))) {
       throw await toApiError(response);
     }
 

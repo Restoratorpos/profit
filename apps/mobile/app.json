@@ -1,0 +1,64 @@
+{
+  "expo": {
+    "name": "ProFit Manager",
+    "slug": "profit-manager",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "profitmanager",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#141414"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uz.profit.manager",
+      "infoPlist": {
+        "CFBundleDisplayName": "ProFit",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAllowsArbitraryLoads": true
+      }
+    },
+    "android": {
+      "package": "uz.profit.manager",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#141414"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#141414"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://localhost:7090",
+      "eas": {
+        "projectId": "00000000-0000-0000-0000-000000000000"
+      }
+    }
+  }
+}

@@ -5,7 +5,6 @@ import {
   LayoutDashboardIcon,
   type LucideIcon,
   PackageIcon,
-  ScanFaceIcon,
   ShoppingBagIcon,
   ShoppingCartIcon,
   TagIcon,
@@ -15,10 +14,14 @@ import {
 import type { MessageKey } from "./i18n/dictionary";
 
 /**
- * `daily` is what the front desk touches every shift; `advanced` is setup and
- * management. Nothing filters on this yet — every item renders — but the split
- * lives here so the planned "show advanced" toggle is a change to one filter,
- * not a restructure of the nav.
+ * `daily` is what the front desk touches every shift; `advanced` is set up once
+ * and then left alone, so it lives behind the "more" row at the foot of the
+ * sidebar rather than costing a permanent slot in a nav the desk reads all day.
+ *
+ * This is now load-bearing rather than documentation: `AppSidebar` renders the
+ * `daily` items and hides the `advanced` ones until the row is pressed. Moving an
+ * item between groups moves it in and out of that fold, which is the whole
+ * mechanism — there is no second list to keep in step.
  */
 export type NavGroup = "daily" | "advanced";
 
@@ -37,6 +40,13 @@ export interface NavItem {
  * a nav entry pointing at a route that does not exist is a compile error rather
  * than a dead link found by clicking. `NavItem` still documents the shape and is
  * enforced structurally by `satisfies`.
+ */
+/*
+ * `/devices` is deliberately absent. Terminals are set up once and then left
+ * alone, so they live in the profile menu rather than taking a permanent slot
+ * in a nav the desk reads all day. `isNavItemActive` is driven by this list, so
+ * nothing in the sidebar lights up while you are on that page — which is
+ * correct: it is not a sidebar destination any more.
  */
 export const NAV_ITEMS = [
   {
@@ -70,16 +80,15 @@ export const NAV_ITEMS = [
     group: "advanced",
   },
   {
+    /*
+     * Daily, unlike the other three management screens: a shift starts with
+     * somebody clocking in and ends with somebody being paid, so the desk opens
+     * this as often as it opens the roster.
+     */
     href: "/workers",
     labelKey: "nav.staff",
     icon: UserCogIcon,
-    group: "advanced",
-  },
-  {
-    href: "/devices",
-    labelKey: "nav.devices",
-    icon: ScanFaceIcon,
-    group: "advanced",
+    group: "daily",
   },
   {
     href: "/members",

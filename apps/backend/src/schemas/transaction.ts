@@ -30,15 +30,25 @@ export type Cashbox = (typeof CASHBOXES)[number];
  * custom case: a price that is not a plan's price, a day pass, a part payment
  * taken outside the sale flow.
  */
+/*
+ * `owner_deposit` — the owner putting capital **in** — was here and is not any
+ * more: the desk does not book the owner's own money, and offering it at the
+ * front counter only invited a takings figure that was not takings.
+ *
+ * Removing it from this list stops new ones being written. It deliberately does
+ * **not** remove the category: rows already carrying it stay readable, keep
+ * their label (`CATEGORY_LABEL` on the web side), and — the part that matters —
+ * stay excluded from revenue by `NON_REVENUE_INCOME` in dashboard.service.ts.
+ * Dropping it from there instead would rewrite history, turning every past
+ * deposit into a day's trading.
+ */
 export const INCOME_CATEGORIES = [
-  /** Abonement — a membership payment entered by hand. */
+  /** A'zolik — a membership payment entered by hand. */
   "membership",
   /** A sale that did not go through the till: kit, an old treadmill, a locker. */
   "goods",
   /** The hall or a room let out to somebody else. */
   "hall_rent",
-  /** The owner putting money **into** the business. */
-  "owner_deposit",
   "other",
 ] as const;
 
@@ -89,6 +99,14 @@ export const TRANSFER_CATEGORY = "cash_move";
  */
 export const MANUAL_INCOME_CATEGORIES: readonly string[] = [
   ...INCOME_CATEGORIES,
+  /*
+   * Withdrawn from the picker above, but still listed here on purpose. What may
+   * be *created* and what may be *cancelled* are not the same question: rows
+   * already carrying this were written by this screen and there is no document
+   * elsewhere to reverse them from, so dropping it here would make every past
+   * owner deposit permanent — including a mistyped one.
+   */
+  "owner_deposit",
   TRANSFER_CATEGORY,
 ];
 

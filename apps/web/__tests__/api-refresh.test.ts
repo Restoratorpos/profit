@@ -99,6 +99,33 @@ describe("apiFetch", () => {
     expect(refreshes).toHaveLength(1);
   });
 
+  /**
+   * A 401 does not always mean the token expired.
+   *
+   * A request that left before someone else renewed the token comes back 401
+   * simply for being stale, and refreshing on its behalf spends a second refresh
+   * token to learn what the app already knows. Every spent token is another
+   * chance for its replacement to go missing, so the cheapest refresh is the one
+   * that never happens.
+   */
+  it("replays against a token renewed while it was in flight, without refreshing", async () => {
+    mockFetch((path) => {
+      if (
+        path.endsWith("/members") &&
+        getAccessToken() === "stale-access-token"
+      ) {
+        // Another request finished its own refresh while this one was out.
+        setAccessToken(SESSION.accessToken);
+        return unauthorized();
+      }
+
+      return json({ ok: true });
+    });
+
+    await expect(apiFetch("/members")).resolves.toEqual({ ok: true });
+    expect(calls).toEqual(["GET /api/members", "GET /api/members"]);
+  });
+
   it("gives up and clears the token when the refresh itself fails", async () => {
     mockFetch(() => unauthorized());
 

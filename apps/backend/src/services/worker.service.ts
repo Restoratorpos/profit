@@ -18,6 +18,7 @@ import {
   branches,
   credentials,
   expenses,
+  gyms,
   ID_LENGTH,
   workers,
 } from "../db/schema.js";
@@ -41,6 +42,7 @@ import type {
   AttendanceMarkInput,
   CreateWorkerInput,
   PayWorkerInput,
+  SalaryHistoryQueryInput,
   UpdateWorkerInput,
   WorkerQueryInput,
 } from "../schemas/worker.js";
@@ -354,11 +356,21 @@ const toWorkerItem = (
   openSince: open?.since ?? null,
 });
 
-/** How many minutes a session contributes; an open shift counts up to `now`. */
-const sessionMinutes = (
-  session: typeof attendanceSessions.$inferSelect,
-  now: Date
-): number => {
+/**
+ * How many minutes a session contributes; an open shift counts up to `now`.
+ *
+ * Typed on the three columns it reads rather than on the whole row, so a
+ * narrowed `select()` can be measured without casting a partial row to a full
+ * one — a cast that would compile happily and then read `undefined` if the
+ * projection ever stopped selecting one of them.
+ */
+interface SessionSpan {
+  checkIn: Date | null;
+  checkOut: Date | null;
+  minutesWorked: number | null;
+}
+
+const sessionMinutes = (session: SessionSpan, now: Date): number => {
   if (session.checkOut) {
     return session.minutesWorked ?? 0;
   }
@@ -866,19 +878,45 @@ export const createWorker = async (
   return toWorkerItem(worker, 0, null, false, 0, currentMonthRange());
 };
 
+/**
+ * Roles the staff screen can show but must never write.
+ *
+ * `workers.role` serves two vocabularies at once: the **auth** roles
+ * (`WORKER_ROLES` — owner, admin, manager, trainer, receptionist) and the
+ * **positions** this screen offers (`WORKER_POSITIONS` — manager, trainer,
+ * receptionist, cleaner, guard, other). They overlap in the middle and diverge
+ * at both ends, and owner is the end that matters: it is the only role that can
+ * rename the gym or reach the settings screen.
+ *
+ * A save from the staff sheet sends a *position*. Applied to an owner it wrote
+ * `trainer` over `owner`, and since the picker has no owner row there was then
+ * no way back through the UI — the gym's only owner was demoted by somebody
+ * editing their own phone number, with nothing to say it had happened.
+ */
+const UNASSIGNABLE_ROLES: readonly string[] = ["owner", "admin"];
+
 export const updateWorker = async (
   gymId: string,
   workerId: string,
   input: UpdateWorkerInput
 ): Promise<void> => {
-  await findWorker(gymId, workerId);
+  const current = await findWorker(gymId, workerId);
+
+  /*
+   * Ignored rather than rejected. The sheet saves the whole form, so refusing
+   * the request would block a legitimate edit to a salary or a shift because of
+   * a field the operator was never offered a way to change.
+   */
+  const role = UNASSIGNABLE_ROLES.includes(current.role ?? "")
+    ? undefined
+    : input.role;
 
   await db
     .update(workers)
     .set({
       ...(input.fullname === undefined ? {} : { fullname: input.fullname }),
       ...(input.phone === undefined ? {} : { phone: input.phone }),
-      ...(input.role === undefined ? {} : { role: input.role }),
+      ...(role === undefined ? {} : { role }),
       ...(input.salaryType === undefined
         ? {}
         : { salaryType: input.salaryType }),
@@ -1037,4 +1075,285 @@ export const checkOut = async (
       createdAt: new Date(),
     });
   });
+};
+
+/** One wage handed over, as the salary-history screen lists it. */
+export interface SalaryHistoryRow {
+  amount: string;
+  id: number;
+  /** The till it came out of: "cash", "card" or "transfer". */
+  method: string;
+  note: string | null;
+  /** When the money moved. */
+  paidAt: string | null;
+  /** The "YYYY-MM" it settles, or null for a wage typed on the cashbox. */
+  period: string | null;
+  workerId: string | null;
+  /** Null only if the worker row was deleted out from under the expense. */
+  workerName: string | null;
+}
+
+export interface SalaryHistoryPage {
+  /**
+   * Every worker who has ever been paid — the filter's options, by name.
+   *
+   * Deliberately not narrowed by the range or by the worker filter. An options
+   * list that shrank to the one name you just picked would strand you there
+   * with no way back to "everyone", and one that emptied along with the date
+   * range would read as "this gym has no staff".
+   */
+  options: { id: string; name: string }[];
+  rows: SalaryHistoryRow[];
+  /** Rows matching the filter, not just the ones on this page. */
+  total: number;
+  /** What those rows add up to — the whole filter, not the page. */
+  totalAmount: string;
+}
+
+/** Wages only, never voided, inside the range, optionally one worker's. */
+const salaryHistoryWhere = (
+  gymId: string,
+  range: DateRange,
+  workerId: string | undefined
+) =>
+  and(
+    eq(expenses.gymId, gymId),
+    eq(expenses.category, SALARY_CATEGORY),
+    isNull(expenses.voidedAt),
+    gte(expenses.paidAt, range.from),
+    lte(expenses.paidAt, range.to),
+    workerId ? eq(expenses.workerId, workerId) : undefined
+  );
+
+/**
+ * Every wage the gym has handed over, across all staff.
+ *
+ * The totals are computed in SQL over the whole filter rather than summed from
+ * `rows`, because `rows` is one page — adding up what is on screen would make
+ * the total change as you page, which is the sort of number a desk stops
+ * trusting.
+ */
+export const listSalaryPayments = async (
+  gymId: string,
+  range: DateRange,
+  query: SalaryHistoryQueryInput
+): Promise<SalaryHistoryPage> => {
+  const where = salaryHistoryWhere(gymId, range, query.workerId);
+
+  const [rows, totals, options] = await Promise.all([
+    db
+      .select({
+        actionId: expenses.actionId,
+        amount: expenses.amount,
+        id: expenses.id,
+        method: expenses.method,
+        note: expenses.note,
+        paidAt: expenses.paidAt,
+        workerId: expenses.workerId,
+        workerName: workers.fullname,
+      })
+      .from(expenses)
+      .leftJoin(workers, eq(workers.workerId, expenses.workerId))
+      .where(where)
+      .orderBy(desc(expenses.paidAt), desc(expenses.id))
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize),
+    db
+      .select({
+        count: sql<number>`COUNT(*)`,
+        sum: sql<string>`SUM(${expenses.amount})`,
+      })
+      .from(expenses)
+      .where(where),
+    db
+      .selectDistinct({ id: expenses.workerId, name: workers.fullname })
+      .from(expenses)
+      .innerJoin(workers, eq(workers.workerId, expenses.workerId))
+      .where(
+        and(
+          eq(expenses.gymId, gymId),
+          eq(expenses.category, SALARY_CATEGORY),
+          isNull(expenses.voidedAt)
+        )
+      )
+      .orderBy(asc(workers.fullname)),
+  ]);
+
+  return {
+    options: options.flatMap((row) =>
+      row.id ? [{ id: row.id, name: row.name ?? row.id }] : []
+    ),
+    rows: rows.map((row) => ({
+      amount: toMoney(row.amount),
+      id: row.id,
+      method: row.method,
+      note: row.note,
+      paidAt: toIso(row.paidAt),
+      period: salaryPeriodOf(row.actionId),
+      workerId: row.workerId,
+      workerName: row.workerName,
+    })),
+    total: Number(totals[0]?.count ?? 0),
+    totalAmount: toMoney(totals[0]?.sum ?? 0),
+  };
+};
+
+/** One shift a worker turned up for, as the work-history screen lists it. */
+export interface WorkHistoryRow {
+  checkIn: string | null;
+  checkOut: string | null;
+  id: number;
+  /** Minutes on this shift; an open one counts up to now. */
+  minutesWorked: number;
+  /** True while the worker is still on shift. */
+  open: boolean;
+  workerId: string | null;
+  /** Null only if the worker row was deleted out from under the session. */
+  workerName: string | null;
+}
+
+export interface WorkHistoryPage {
+  /**
+   * Every worker who has ever clocked in — the filter's options, by name.
+   *
+   * Unnarrowed by range or worker for the same reason the payments list is:
+   * an options list that shrank to the name you just picked would strand you
+   * there with no way back to "everyone".
+   */
+  options: { id: string; name: string }[];
+  rows: WorkHistoryRow[];
+  /** Sessions matching the filter, not just the ones on this page. */
+  total: number;
+  /** Minutes those sessions add up to — the whole filter, not the page. */
+  totalMinutes: number;
+}
+
+/** Worker shifts, inside the range, optionally one worker's. */
+const workHistoryWhere = (
+  gymId: string,
+  range: DateRange,
+  workerId: string | undefined
+) =>
+  and(
+    workerScope(gymId),
+    gte(attendanceSessions.checkIn, range.from),
+    lte(attendanceSessions.checkIn, range.to),
+    workerId ? eq(attendanceSessions.personId, workerId) : undefined
+  );
+
+/**
+ * Every shift the gym's staff has worked, across all of them.
+ *
+ * The sibling of `listSalaryPayments`, and deliberately the same shape: the two
+ * answer "where did the salary money go" and "what was it paid for", and the
+ * drawer switches between them without relaying out.
+ *
+ * ## Why the total is not summed in SQL
+ *
+ * `minutes_worked` is only filled when a shift *closes*. An open shift stores
+ * null and is worth however long it has been running, which is a value that
+ * exists at read time and nowhere in the table — `SUM(minutes_worked)` would
+ * quietly count everyone currently on the floor as zero. So the count comes
+ * from SQL and the minutes come from a second pass over the matching rows,
+ * measured against one `now` shared with the page's own rows so the footer and
+ * the list cannot disagree.
+ */
+export const listWorkHistory = async (
+  gymId: string,
+  range: DateRange,
+  query: SalaryHistoryQueryInput
+): Promise<WorkHistoryPage> => {
+  const where = workHistoryWhere(gymId, range, query.workerId);
+
+  const [sessionRows, spanRows, options] = await Promise.all([
+    db
+      .select({
+        checkIn: attendanceSessions.checkIn,
+        checkOut: attendanceSessions.checkOut,
+        minutesWorked: attendanceSessions.minutesWorked,
+        personId: attendanceSessions.personId,
+        sessionId: attendanceSessions.sessionId,
+        workerName: workers.fullname,
+      })
+      .from(attendanceSessions)
+      .leftJoin(workers, eq(workers.workerId, attendanceSessions.personId))
+      .where(where)
+      .orderBy(
+        desc(attendanceSessions.checkIn),
+        desc(attendanceSessions.sessionId)
+      )
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize),
+    db
+      .select({
+        checkIn: attendanceSessions.checkIn,
+        checkOut: attendanceSessions.checkOut,
+        minutesWorked: attendanceSessions.minutesWorked,
+      })
+      .from(attendanceSessions)
+      .where(where),
+    db
+      .selectDistinct({
+        id: attendanceSessions.personId,
+        name: workers.fullname,
+      })
+      .from(attendanceSessions)
+      .innerJoin(workers, eq(workers.workerId, attendanceSessions.personId))
+      .where(workerScope(gymId))
+      .orderBy(asc(workers.fullname)),
+  ]);
+
+  const now = new Date();
+
+  let totalMinutes = 0;
+
+  for (const span of spanRows) {
+    totalMinutes += sessionMinutes(span, now);
+  }
+
+  return {
+    options: options.flatMap((row) =>
+      row.id ? [{ id: row.id, name: row.name ?? row.id }] : []
+    ),
+    rows: sessionRows.map((row) => ({
+      checkIn: toIso(row.checkIn),
+      checkOut: toIso(row.checkOut),
+      id: row.sessionId,
+      minutesWorked: sessionMinutes(row, now),
+      open: !row.checkOut,
+      workerId: row.personId,
+      workerName: row.workerName,
+    })),
+    total: spanRows.length,
+    totalMinutes,
+  };
+};
+
+/**
+ * The day of the month the gym settles monthly salaries on, or null when the
+ * desk has never chosen one.
+ *
+ * It lives on `gyms` rather than on each worker because it is a policy of the
+ * business, not of the person — one gym pays everybody on the same day, and a
+ * per-worker copy would be thirty rows to keep in step for a single decision.
+ */
+export const getPayday = async (gymId: string): Promise<number | null> => {
+  const [row] = await db
+    .select({ payday: gyms.payday })
+    .from(gyms)
+    .where(eq(gyms.gymId, gymId))
+    .limit(1);
+
+  if (!row) {
+    throw new NotFoundError("Gym not found");
+  }
+
+  return row.payday ?? null;
+};
+
+export const setPayday = async (
+  gymId: string,
+  payday: number
+): Promise<void> => {
+  await db.update(gyms).set({ payday }).where(eq(gyms.gymId, gymId));
 };

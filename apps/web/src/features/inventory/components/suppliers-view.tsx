@@ -32,8 +32,10 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
+import { formatDate } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/provider";
 import { useDeleteSupplier } from "../api";
 import type { SupplierSummary } from "../types";
 import { PaySupplierSheet } from "./pay-supplier-sheet";
@@ -44,26 +46,11 @@ interface SuppliersViewProperties {
   suppliers: readonly SupplierSummary[];
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-const formatDay = (value: string | null): string => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = new Date(value);
-
-  return Number.isNaN(parsed.getTime()) ? "—" : DATE_FORMAT.format(parsed);
-};
-
 export const SuppliersView = ({
   messages,
   suppliers,
 }: SuppliersViewProperties) => {
+  const { locale } = useLocale();
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<SupplierSummary | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -206,7 +193,7 @@ export const SuppliersView = ({
                       {supplier.phone ? formatPhone(supplier.phone) : "—"}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                      {formatDay(supplier.lastDeliveryAt)}
+                      {formatDate(supplier.lastDeliveryAt, locale)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatMoney(supplier.delivered)}

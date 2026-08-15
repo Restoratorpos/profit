@@ -25,7 +25,7 @@ import {
 } from "@repo/design-system/components/ui/select";
 import { Separator } from "@repo/design-system/components/ui/separator";
 import { Spinner } from "@repo/design-system/components/ui/spinner";
-import { SELECTED_FILL } from "@repo/design-system/lib/selected";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
   BanknoteIcon,
@@ -35,12 +35,13 @@ import {
   WalletIcon,
 } from "lucide-react";
 import { type FormEvent, useState } from "react";
+import { MoneyInput } from "@/components/money-input";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { usePayWorker, useWorkerPayroll } from "../api";
 import {
-  formatHours,
+  formatDuration,
   formatMonth,
   formatStamp,
   initialOf,
@@ -143,7 +144,7 @@ const PayrollSummary = ({
     <>
       <SummaryRow
         label={messages["workers.colHours"]}
-        value={formatHours(payroll.minutesWorked)}
+        value={formatDuration(payroll.minutesWorked, locale)}
       />
 
       {/* A monthly salary is the whole month's from its first day — true, and
@@ -294,7 +295,12 @@ export const PayWorkerDialog = ({
             <WalletIcon className="size-5" />
             {messages["workers.payTitle"]}
           </DialogTitle>
-          <DialogDescription>{formatMonth(period, locale)}</DialogDescription>
+          {/* The month is the first thing the form asks for and shows back, so
+              printing it under the title again said the same word twice.
+              Kept for the dialog's accessible description, not for the eye. */}
+          <DialogDescription className="sr-only">
+            {formatMonth(period, locale)}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 md:grid-cols-2">
@@ -377,11 +383,10 @@ export const PayWorkerDialog = ({
                 <FieldLabel htmlFor="pay-amount">
                   {messages["workers.payAmount"]} *
                 </FieldLabel>
-                <Input
+                <MoneyInput
                   autoComplete="off"
                   id="pay-amount"
-                  inputMode="decimal"
-                  onChange={(event) => setAmount(event.target.value)}
+                  onChange={setAmount}
                   value={amount}
                 />
               </Field>
@@ -416,7 +421,7 @@ export const PayWorkerDialog = ({
                     return (
                       <Button
                         aria-checked={isActive}
-                        className={cn(isActive && SELECTED_FILL)}
+                        className={cn(isActive && SELECTED_TINT)}
                         key={option.value}
                         onClick={() => setMethod(option.value)}
                         role="radio"
