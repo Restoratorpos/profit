@@ -376,7 +376,8 @@ export const WorkersView = ({
                   <TableRow key={worker.id}>
                     <TableCell>
                       <Button
-                        className="h-auto justify-start gap-2 p-0 text-left font-medium hover:underline"
+                        // Plain, like the product names — see stock-table.tsx.
+                        className="h-auto justify-start gap-2 p-0 text-left font-medium text-foreground hover:underline"
                         onClick={() => setDetail(worker)}
                         type="button"
                         variant="link"

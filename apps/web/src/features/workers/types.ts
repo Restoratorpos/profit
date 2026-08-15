@@ -396,3 +396,44 @@ export const DEFAULT_SALARY_HISTORY_QUERY: SalaryHistoryQuery = {
   pageSize: 25,
   workerId: ALL_WORKERS,
 };
+
+/** One shift worked, as the work-history half of the drawer lists it. */
+export interface WorkHistoryRow {
+  checkIn: string | null;
+  checkOut: string | null;
+  id: number;
+  /** Minutes on this shift; an open one counts up to now. */
+  minutesWorked: number;
+  /** True while the worker is still on the floor. */
+  open: boolean;
+  workerId: string | null;
+  workerName: string | null;
+}
+
+/** Mirrors the backend's `WorkHistoryPage`. */
+export interface WorkHistoryPage {
+  /** Everyone who has ever clocked in — the worker filter's options. */
+  options: { id: string; name: string }[];
+  rows: WorkHistoryRow[];
+  /** Sessions matching the filter, not just this page. */
+  total: number;
+  /** Minutes those sessions add up to, over the whole filter. */
+  totalMinutes: number;
+}
+
+/**
+ * Which question the history drawer is answering.
+ *
+ * The two share one set of filters — a worker and a period — because they are
+ * two views of the same fact: `payments` is what the gym handed over, `shifts`
+ * is what it was handed over for. Switching keeps the filters, so "show me
+ * Aziz's June" is asked once and answered twice.
+ */
+export const HISTORY_TABS = ["payments", "shifts"] as const;
+
+export type HistoryTab = (typeof HISTORY_TABS)[number];
+
+export const HISTORY_TAB_LABEL: Record<HistoryTab, MessageKey> = {
+  payments: "workers.tabPayments",
+  shifts: "workers.tabShifts",
+};

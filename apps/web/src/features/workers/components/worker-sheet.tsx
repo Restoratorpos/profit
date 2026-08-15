@@ -488,12 +488,21 @@ export const WorkerSheet = ({
               </div>
             </Field>
 
-            {/* Role, pay and start date on one line: three short answers about
-                the same hire, and each is the width of its own answer rather
-                than half a row. The date column is the widest of the three
-                because a month name is longer than a job title or a sum — a
-                third each clipped "30 Sentabr 2026". */}
-            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1.2fr]">
+            {/* Role, pay and start date: three short answers about the same
+                hire, but only TWO of them fit on a line here.
+
+                This was one row of `1fr 1fr 1.2fr`. The sheet is `max-w-lg`, so
+                the row has ~480px to give — and `1fr` is `minmax(auto, 1fr)`,
+                whose `auto` floor is the column's min-content. "Ishga qabul
+                sanasi" and the assembled date button set a floor far above a
+                1.2fr share, so the date column took what it needed and the two
+                `1fr` columns split what was left. The pay box collapsed to a
+                single clipped character. A fraction only distributes the space
+                that is actually spare.
+
+                Two columns and the date on its own row gives every control a
+                width it can render in, and matches the shift-time row below. */}
+            <div className="grid gap-3 sm:grid-cols-2">
               <PositionField
                 disabled={isPending}
                 lockedRole={lockedRole}
@@ -502,7 +511,10 @@ export const WorkerSheet = ({
                 value={position}
               />
 
-              <Field>
+              {/* `min-w-0` on each cell so a long label or value can never again
+                  push a sibling below a usable width — it overflows its own
+                  column instead of stealing from the next one. */}
+              <Field className="min-w-0">
                 <FieldLabel htmlFor="worker-salary">{salaryLabel}</FieldLabel>
                 <MoneyInput
                   defaultValue={
@@ -517,7 +529,7 @@ export const WorkerSheet = ({
                 />
               </Field>
 
-              <Field>
+              <Field className="min-w-0 sm:col-span-2">
                 <FieldLabel htmlFor="worker-hired">
                   {messages["workers.hireDate"]}
                 </FieldLabel>

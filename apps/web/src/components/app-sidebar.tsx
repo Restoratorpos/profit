@@ -44,9 +44,22 @@ const NavRow = ({
           // treatment the tab and pager buttons use, so "selected" looks
           // identical everywhere instead of the sidebar inventing a green-text
           // variant of it.
-          "data-[active=true]:bg-primary data-[active=true]:font-medium data-[active=true]:text-primary-foreground",
-          "data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground",
-          "[&_svg]:data-[active=true]:text-primary-foreground"
+          //
+          // Written with the SAME `data-active:` prefix the base
+          // `SidebarMenuButton` uses, not the longhand `data-[active=true]:`.
+          // The base carries `data-active:bg-selected` and
+          // `data-active:[&_svg]:text-selected-foreground`; tailwind-merge only
+          // drops a base class when the modifier chain matches character for
+          // character, so the longhand spelling left BOTH in the stylesheet and
+          // let source order decide. The icon lost that race and stayed white —
+          // 1.7:1 on the neon, and a different-looking green from every other
+          // selected control on the page.
+          "data-active:bg-primary data-active:font-medium data-active:text-primary-foreground",
+          "data-active:hover:bg-primary/90 data-active:hover:text-primary-foreground",
+          // Also longhand-vs-shorthand: `[&_svg]:data-[active=true]:…` compiles
+          // to `.cls svg[data-active=true]` — the attribute lands on the <svg>,
+          // which never has it — so this rule matched nothing at all.
+          "data-active:[&_svg]:text-primary-foreground"
         )}
         isActive={isNavItemActive(item.href, pathname)}
         tooltip={label}

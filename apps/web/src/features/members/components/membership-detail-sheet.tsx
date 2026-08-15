@@ -41,8 +41,10 @@ interface MembershipDetailSheetProperties {
   onOpenChange: (open: boolean) => void;
 }
 
+/* Same three colours as the table's badges — this panel is what one of them
+   opens, so a membership must not change colour on the way in. */
 const STATE_BADGE: Record<MembershipState, string> = {
-  active: "border-primary/40 bg-primary/10 text-primary-accent",
+  active: "border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400",
   expiring:
     "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
   expired: "border-border bg-muted text-muted-foreground",
@@ -51,14 +53,18 @@ const STATE_BADGE: Record<MembershipState, string> = {
 /**
  * The state, again, as a stripe down the edge of the card.
  *
- * The badge already says it in words; this is what makes a lapsing membership
- * findable in a stack of them without reading any of them. Same three colours as
- * the badge and as the roster's own badges — one idea, one palette.
+ * Only for the states worth spotting. A stripe on every card marks nothing, and
+ * most cards are active — so an active one is a plain bordered card and the
+ * thick edge is reserved for the two states that want finding in a stack.
+ *
+ * Active must therefore restate `border-l` to undo the base `border-l-4`, not
+ * merely leave the colour off: a transparent 4px left border is a card with no
+ * left edge at all.
  */
 const STATE_ACCENT: Record<MembershipState, string> = {
-  active: "border-l-primary/60",
-  expiring: "border-l-amber-500/60",
-  expired: "border-l-border",
+  active: "border-l",
+  expiring: "border-l-4 border-l-amber-500/60",
+  expired: "border-l-4 border-l-border",
 };
 
 /**
@@ -272,7 +278,9 @@ const MembershipCard = ({
 }) => (
   <li
     className={cn(
-      "flex flex-col gap-3 rounded-xl border border-l-4 p-4",
+      // The left edge's width belongs to STATE_ACCENT, not here — only two of
+      // the three states thicken it.
+      "flex flex-col gap-3 rounded-xl border p-4",
       STATE_ACCENT[membership.state]
     )}
   >

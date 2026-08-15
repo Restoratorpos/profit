@@ -30,6 +30,7 @@ import {
   getWorkerPayroll,
   listSalaryPayments,
   listWorkers,
+  listWorkHistory,
   pageWorkers,
   payWorker,
   rangeFromQuery,
@@ -90,6 +91,21 @@ export const workerRoutes = new Hono<AppEnv>()
       );
     }
   )
+  /*
+   * Every shift the gym's staff has worked. The other half of `/payments` —
+   * same filters, same page shape — and above `/:workerId` for the same reason.
+   */
+  .get("/shifts", zValidator("query", salaryHistoryQuerySchema), async (c) => {
+    const query = c.req.valid("query");
+
+    return c.json(
+      await listWorkHistory(
+        c.get("gymId"),
+        rangeFromQuery(query.from, query.to),
+        query
+      )
+    );
+  })
   /*
    * The day of the month monthly salaries are settled on. A gym-wide policy, so
    * it reads and writes one field on `gyms` — and, like `/payments`, it has to

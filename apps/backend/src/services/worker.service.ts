@@ -356,11 +356,21 @@ const toWorkerItem = (
   openSince: open?.since ?? null,
 });
 
-/** How many minutes a session contributes; an open shift counts up to `now`. */
-const sessionMinutes = (
-  session: typeof attendanceSessions.$inferSelect,
-  now: Date
-): number => {
+/**
+ * How many minutes a session contributes; an open shift counts up to `now`.
+ *
+ * Typed on the three columns it reads rather than on the whole row, so a
+ * narrowed `select()` can be measured without casting a partial row to a full
+ * one — a cast that would compile happily and then read `undefined` if the
+ * projection ever stopped selecting one of them.
+ */
+interface SessionSpan {
+  checkIn: Date | null;
+  checkOut: Date | null;
+  minutesWorked: number | null;
+}
+
+const sessionMinutes = (session: SessionSpan, now: Date): number => {
   if (session.checkOut) {
     return session.minutesWorked ?? 0;
   }
@@ -1185,6 +1195,137 @@ export const listSalaryPayments = async (
     })),
     total: Number(totals[0]?.count ?? 0),
     totalAmount: toMoney(totals[0]?.sum ?? 0),
+  };
+};
+
+/** One shift a worker turned up for, as the work-history screen lists it. */
+export interface WorkHistoryRow {
+  checkIn: string | null;
+  checkOut: string | null;
+  id: number;
+  /** Minutes on this shift; an open one counts up to now. */
+  minutesWorked: number;
+  /** True while the worker is still on shift. */
+  open: boolean;
+  workerId: string | null;
+  /** Null only if the worker row was deleted out from under the session. */
+  workerName: string | null;
+}
+
+export interface WorkHistoryPage {
+  /**
+   * Every worker who has ever clocked in — the filter's options, by name.
+   *
+   * Unnarrowed by range or worker for the same reason the payments list is:
+   * an options list that shrank to the name you just picked would strand you
+   * there with no way back to "everyone".
+   */
+  options: { id: string; name: string }[];
+  rows: WorkHistoryRow[];
+  /** Sessions matching the filter, not just the ones on this page. */
+  total: number;
+  /** Minutes those sessions add up to — the whole filter, not the page. */
+  totalMinutes: number;
+}
+
+/** Worker shifts, inside the range, optionally one worker's. */
+const workHistoryWhere = (
+  gymId: string,
+  range: DateRange,
+  workerId: string | undefined
+) =>
+  and(
+    workerScope(gymId),
+    gte(attendanceSessions.checkIn, range.from),
+    lte(attendanceSessions.checkIn, range.to),
+    workerId ? eq(attendanceSessions.personId, workerId) : undefined
+  );
+
+/**
+ * Every shift the gym's staff has worked, across all of them.
+ *
+ * The sibling of `listSalaryPayments`, and deliberately the same shape: the two
+ * answer "where did the salary money go" and "what was it paid for", and the
+ * drawer switches between them without relaying out.
+ *
+ * ## Why the total is not summed in SQL
+ *
+ * `minutes_worked` is only filled when a shift *closes*. An open shift stores
+ * null and is worth however long it has been running, which is a value that
+ * exists at read time and nowhere in the table — `SUM(minutes_worked)` would
+ * quietly count everyone currently on the floor as zero. So the count comes
+ * from SQL and the minutes come from a second pass over the matching rows,
+ * measured against one `now` shared with the page's own rows so the footer and
+ * the list cannot disagree.
+ */
+export const listWorkHistory = async (
+  gymId: string,
+  range: DateRange,
+  query: SalaryHistoryQueryInput
+): Promise<WorkHistoryPage> => {
+  const where = workHistoryWhere(gymId, range, query.workerId);
+
+  const [sessionRows, spanRows, options] = await Promise.all([
+    db
+      .select({
+        checkIn: attendanceSessions.checkIn,
+        checkOut: attendanceSessions.checkOut,
+        minutesWorked: attendanceSessions.minutesWorked,
+        personId: attendanceSessions.personId,
+        sessionId: attendanceSessions.sessionId,
+        workerName: workers.fullname,
+      })
+      .from(attendanceSessions)
+      .leftJoin(workers, eq(workers.workerId, attendanceSessions.personId))
+      .where(where)
+      .orderBy(
+        desc(attendanceSessions.checkIn),
+        desc(attendanceSessions.sessionId)
+      )
+      .limit(query.pageSize)
+      .offset((query.page - 1) * query.pageSize),
+    db
+      .select({
+        checkIn: attendanceSessions.checkIn,
+        checkOut: attendanceSessions.checkOut,
+        minutesWorked: attendanceSessions.minutesWorked,
+      })
+      .from(attendanceSessions)
+      .where(where),
+    db
+      .selectDistinct({
+        id: attendanceSessions.personId,
+        name: workers.fullname,
+      })
+      .from(attendanceSessions)
+      .innerJoin(workers, eq(workers.workerId, attendanceSessions.personId))
+      .where(workerScope(gymId))
+      .orderBy(asc(workers.fullname)),
+  ]);
+
+  const now = new Date();
+
+  let totalMinutes = 0;
+
+  for (const span of spanRows) {
+    totalMinutes += sessionMinutes(span, now);
+  }
+
+  return {
+    options: options.flatMap((row) =>
+      row.id ? [{ id: row.id, name: row.name ?? row.id }] : []
+    ),
+    rows: sessionRows.map((row) => ({
+      checkIn: toIso(row.checkIn),
+      checkOut: toIso(row.checkOut),
+      id: row.sessionId,
+      minutesWorked: sessionMinutes(row, now),
+      open: !row.checkOut,
+      workerId: row.personId,
+      workerName: row.workerName,
+    })),
+    total: spanRows.length,
+    totalMinutes,
   };
 };
 

@@ -70,9 +70,12 @@ export const lightTheme: Theme = {
   border: "#d4d4d4",
 
   primary: "#2ee87f",
-  primaryAccent: "#0aa352",
+  /* One green, matching the web's --primary-accent — see the note on the
+     ProFit green in packages/design-system/styles/globals.css for what the
+     single tone trades away and how to put the readable pair back. */
+  primaryAccent: "#2ee87f",
   primaryForeground: "#052e16",
-  primaryTint: "rgba(10,163,82,0.10)",
+  primaryTint: "rgba(46,232,127,0.10)",
 
   destructive: "#e7000b",
   warning: "#b45309",

@@ -1,6 +1,6 @@
 {
   "name": "desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "//productName": "Electron reads this for app.getName(), which decides where userData lives. Without it the config file would sit in %APPDATA%\\desktop — named after the workspace rather than the product, and not where anybody would look for it.",
   "productName": "GYM",

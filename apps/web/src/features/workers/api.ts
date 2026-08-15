@@ -15,6 +15,7 @@ import type {
   WorkerPage,
   WorkerPayroll,
   WorkerQuery,
+  WorkHistoryPage,
 } from "./types";
 import { ALL_WORKERS } from "./types";
 
@@ -35,6 +36,8 @@ export const workerKeys = {
     [...workerKeys.all, workerId, "payroll", period] as const,
   payments: (query: SalaryHistoryQuery, bounds: RangeBounds) =>
     [...workerKeys.all, "payments", query, bounds] as const,
+  shifts: (query: SalaryHistoryQuery, bounds: RangeBounds) =>
+    [...workerKeys.all, "shifts", query, bounds] as const,
 };
 
 export interface WorkerInput {
@@ -179,6 +182,29 @@ export const useSalaryHistory = (
       ),
     enabled,
     // Holds the table steady while a new filter loads, like the staff list.
+    placeholderData: keepPreviousData,
+  });
+
+/**
+ * Every shift the gym's staff has worked, newest first.
+ *
+ * Takes the same filters and the same `enabled` gate as `useSalaryHistory`, and
+ * is called with `enabled` false while the drawer sits on the other tab — the
+ * two never fetch at once, so switching costs one request rather than keeping a
+ * second whole-gym read warm for a table nobody is looking at.
+ */
+export const useWorkHistory = (
+  query: SalaryHistoryQuery,
+  bounds: RangeBounds,
+  enabled: boolean
+) =>
+  useQuery({
+    queryKey: workerKeys.shifts(query, bounds),
+    queryFn: () =>
+      apiFetch<WorkHistoryPage>(
+        `/workers/shifts?${toPaymentsQuery(query, bounds)}`
+      ),
+    enabled,
     placeholderData: keepPreviousData,
   });
 

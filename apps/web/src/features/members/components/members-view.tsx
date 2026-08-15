@@ -146,17 +146,26 @@ const DebtCell = ({
 /**
  * How a membership's state paints.
  *
- * Three states, three readings, and the colours are the ones the rest of the
- * product already uses for the same ideas — green for in force, amber for
- * needs attention, muted for done. Expired ones stay on the row rather than
- * being dropped: "the gym plan ran out, the sauna is still going" is the whole
- * picture, and hiding half of it is what the old badge did.
+ * Three states, three readings — blue for in force, amber for needs attention,
+ * muted for done. Blue rather than `--primary`: the brand green is also what
+ * "selected" is made of, so a row of green badges read as a row of chosen
+ * things. Expired ones stay on the row rather than being dropped: "the gym plan
+ * ran out, the sauna is still going" is the whole picture, and hiding half of it
+ * is what the old badge did.
+ *
+ * Each state also restates its own focus colours. These badges are buttons, and
+ * `Badge`'s base carries `focus-visible:border-ring focus-visible:ring-ring/50`
+ * — `--ring` is the brand green, so the badge you clicked to open the panel got
+ * a green border drawn over its own the moment the panel closed and focus came
+ * back to it. That green was not the state's colour and did not mean anything.
  */
 const STATE_STYLE: Record<MembershipState, string> = {
-  active: "border-primary/40 bg-primary/10 text-primary-accent",
+  active:
+    "border-blue-500/40 bg-blue-500/10 text-blue-600 focus-visible:border-blue-500 focus-visible:ring-blue-500/40 dark:text-blue-400",
   expiring:
-    "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  expired: "border-border bg-muted text-muted-foreground line-through",
+    "border-amber-500/40 bg-amber-500/10 text-amber-600 focus-visible:border-amber-500 focus-visible:ring-amber-500/40 dark:text-amber-400",
+  expired:
+    "border-border bg-muted text-muted-foreground line-through focus-visible:border-foreground/40 focus-visible:ring-foreground/20",
 };
 
 /**
