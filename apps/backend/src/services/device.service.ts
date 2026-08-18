@@ -509,7 +509,131 @@ export interface EnrollResult {
   employeeNo: string;
   hasFace: boolean;
   name: string;
+  /** The same id before `toDeviceEmployeeNo`, for further calls to the box. */
+  terminalId: string;
 }
+
+/** The name a terminal shows, and the id it shows underneath it. */
+interface TerminalIdentity {
+  name: string;
+  terminalId: string;
+}
+
+/**
+ * What a terminal should know a person by.
+ *
+ * A MinMoe prints two lines when it recognises somebody: the name it was given,
+ * and beneath it the raw `employeeNo`. So the id we enrol is on screen at every
+ * scan, and a 20-character nanoid there is noise. A member's code ("A04") is
+ * what the desk calls them by, so that is the id the box gets — the box then
+ * reads "Name" over "A04" on its own, with no prefix stuffed into the name.
+ * Staff carry no code and keep their id.
+ *
+ * `credentials.credential_value` stores this exact string, which is what
+ * `resolveCredential` matches a scan against, so the id on screen and the id we
+ * resolve are always the same one.
+ */
+const terminalIdentityOf = async (
+  gymId: string,
+  personType: "member" | "worker",
+  personId: string
+): Promise<TerminalIdentity | null> => {
+  const named = (name: string | null, terminalId: string): TerminalIdentity => ({
+    // A person with no name would leave the device showing an empty box; their
+    // id is at least something the desk can act on.
+    name: name?.trim() || terminalId,
+    terminalId,
+  });
+
+  if (personType === "worker") {
+    const [row] = await db
+      .select({ name: workers.fullname })
+      .from(workers)
+      .where(and(eq(workers.gymId, gymId), eq(workers.workerId, personId)))
+      .limit(1);
+
+    return row ? named(row.name, personId) : null;
+  }
+
+  const [row] = await db
+    .select({ code: members.uniqueId, name: members.fullname })
+    .from(members)
+    .where(and(eq(members.gymId, gymId), eq(members.memberId, personId)))
+    .limit(1);
+
+  return row ? named(row.name, row.code ?? personId) : null;
+};
+
+/**
+ * Whether the terminal holds a face for this id, erring towards yes.
+ *
+ * An unreachable or unclear answer must not read as "no face here", because the
+ * only thing the caller does with a no is delete the record.
+ */
+const holdsFace = async (
+  target: DeviceTarget,
+  employeeNo: string
+): Promise<boolean> => {
+  try {
+    return await hasFaceOnDevice(target, employeeNo);
+  } catch {
+    return true;
+  }
+};
+
+/**
+ * Reconciles the id a terminal already holds a person under with the one we now
+ * want them under, and returns the id to enrol.
+ *
+ * Members enrolled before their code became the terminal id are on the box under
+ * an encoded nanoid, and a person record cannot be renamed — moving them means
+ * deleting and re-adding, which takes their face with it. So the move rides on an
+ * enrolment that carries a replacement photo. A photo-less sync of somebody whose
+ * face is already on the device leaves them where they are: a stale id under the
+ * name is worth less than the face that opens the door for them, and the next
+ * capture migrates them anyway.
+ *
+ * Deleting is best-effort — a device that has already forgotten them, or cannot
+ * be reached, must not fail the enrolment that follows.
+ */
+const reconcileTerminalId = async (
+  gymId: string,
+  deviceId: string,
+  target: DeviceTarget,
+  personId: string,
+  terminalId: string,
+  hasPhoto: boolean
+): Promise<string> => {
+  const [existing] = await db
+    .select({ value: credentials.credentialValue })
+    .from(credentials)
+    .where(
+      and(
+        eq(credentials.gymId, gymId),
+        eq(credentials.deviceId, deviceId),
+        eq(credentials.ownerId, personId)
+      )
+    )
+    .limit(1);
+
+  const stale = existing?.value;
+
+  if (!stale || stale === terminalId) {
+    return terminalId;
+  }
+
+  if (!hasPhoto && (await holdsFace(target, stale))) {
+    return stale;
+  }
+
+  try {
+    await deletePerson(target, stale);
+  } catch {
+    // Nothing to remove, or nothing reachable to remove it from.
+  }
+
+  return terminalId;
+};
 
 /**
  * Puts a person on the terminal and records the credential that ties their
@@ -538,40 +662,32 @@ export const enrollPerson = async (
   const device = await findDevice(gymId, deviceId);
   const target = targetOf(device);
 
-  const name = await (async () => {
-    if (input.personType === "worker") {
-      const [row] = await db
-        .select({ name: workers.fullname })
-        .from(workers)
-        .where(
-          and(eq(workers.gymId, gymId), eq(workers.workerId, input.personId))
-        )
-        .limit(1);
+  const identity = await terminalIdentityOf(
+    gymId,
+    input.personType,
+    input.personId
+  );
 
-      return row?.name ?? null;
-    }
-
-    const [row] = await db
-      .select({ name: members.fullname })
-      .from(members)
-      .where(
-        and(eq(members.gymId, gymId), eq(members.memberId, input.personId))
-      )
-      .limit(1);
-
-    return row?.name ?? null;
-  })();
-
-  if (name === null) {
+  if (!identity) {
     throw new NotFoundError("Person not found");
   }
 
-  await putPerson(target, { employeeNo: input.personId, name });
-
+  const { name } = identity;
   const hasFace = Boolean(input.photo);
 
+  const terminalId = await reconcileTerminalId(
+    gymId,
+    deviceId,
+    target,
+    input.personId,
+    identity.terminalId,
+    hasFace
+  );
+
+  await putPerson(target, { employeeNo: terminalId, name });
+
   if (input.photo) {
-    await putFace(target, input.personId, decodeBase64Image(input.photo));
+    await putFace(target, terminalId, decodeBase64Image(input.photo));
   }
 
   const credentialId = await recordCredential(
@@ -579,14 +695,16 @@ export const enrollPerson = async (
     deviceId,
     input.personType,
     input.personId,
+    terminalId,
     workerId
   );
 
   return {
     credentialId,
-    employeeNo: toDeviceEmployeeNo(input.personId),
+    employeeNo: toDeviceEmployeeNo(terminalId),
     hasFace,
     name,
+    terminalId,
   };
 };
 
@@ -594,12 +712,18 @@ export const enrollPerson = async (
  * The row that turns a scan back into a person, created once per person per
  * terminal. Re-enrolling revives the existing one rather than stacking a second
  * that resolves to the same member.
+ *
+ * `credentialValue` is the id the *device* holds them under — a member's code,
+ * a worker's own id — which is what a scan reports and what `resolveCredential`
+ * looks up. It is rewritten on every enrolment, so a member enrolled before
+ * codes went to the terminal is re-pointed at their code rather than orphaned.
  */
 const recordCredential = async (
   gymId: string,
   deviceId: string,
   personType: "member" | "worker",
   personId: string,
+  terminalId: string,
   workerId: string | null
 ): Promise<string> => {
   const [existing] = await db
@@ -608,7 +732,7 @@ const recordCredential = async (
     .where(
       and(
         eq(credentials.gymId, gymId),
-        eq(credentials.credentialValue, personId),
+        eq(credentials.ownerId, personId),
         eq(credentials.deviceId, deviceId)
       )
     )
@@ -617,7 +741,12 @@ const recordCredential = async (
   if (existing) {
     await db
       .update(credentials)
-      .set({ isActive: true, revokedAt: null, revokedReason: null })
+      .set({
+        credentialValue: terminalId,
+        isActive: true,
+        revokedAt: null,
+        revokedReason: null,
+      })
       .where(eq(credentials.credentialId, existing.id));
 
     return existing.id;
@@ -629,7 +758,7 @@ const recordCredential = async (
     createdBy: workerId,
     credentialId,
     credentialType: "face",
-    credentialValue: personId,
+    credentialValue: terminalId,
     deviceId,
     gymId,
     isActive: true,
@@ -717,17 +846,28 @@ export const captureFaceFromEvent = async (
     return null;
   }
 
+  const identity = await terminalIdentityOf(
+    gymId,
+    armed.personType,
+    armed.personId
+  );
+
+  if (!identity) {
+    return null;
+  }
+
   const active = await activeDevicesOf(gymId);
   let enrolled = 0;
 
   for (const device of active) {
     try {
-      await putFace(targetOf(device), armed.personId, picture);
+      await putFace(targetOf(device), identity.terminalId, picture);
       await recordCredential(
         gymId,
         device.deviceId,
         armed.personType,
         armed.personId,
+        identity.terminalId,
         workerId
       );
       enrolled += 1;
@@ -787,7 +927,8 @@ export const syncFaceStatus = async (
     const name = device.deviceName ?? device.deviceId;
 
     try {
-      await enrollPerson(
+      // Ask about the id the box now holds them under, not their own id.
+      const { terminalId } = await enrollPerson(
         gymId,
         device.deviceId,
         { personId, personType },
@@ -796,7 +937,7 @@ export const syncFaceStatus = async (
 
       statuses.push({
         error: null,
-        hasFace: await hasFaceOnDevice(targetOf(device), personId),
+        hasFace: await hasFaceOnDevice(targetOf(device), terminalId),
         id: device.deviceId,
         name,
       });

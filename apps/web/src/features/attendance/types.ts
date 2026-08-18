@@ -62,12 +62,58 @@ export interface DuplicateScan {
   reason: "debounce" | "inside";
 }
 
+/**
+ * A member scanned out while owing on shop/bar orders. The door left the visit
+ * open on purpose — the desk settles the tab or waves them out with it. Order
+ * debt only; what they owe on their membership never shows here.
+ */
+export interface CheckoutNotice {
+  at: string;
+  deviceName: string | null;
+  /** What the balance is made of, most-bought first. */
+  items: OwedItem[];
+  memberId: string;
+  name: string;
+  /** Outstanding shop/bar balance, a decimal string. */
+  remaining: string;
+  uniqueId: string | null;
+}
+
+/** One unpaid thing, summed across the member's open orders. */
+export interface OwedItem {
+  name: string;
+  quantity: number;
+}
+
 /** One poll of the door: everything the banner shows, as of one moment. */
 export interface DoorState {
+  checkoutNotice: CheckoutNotice | null;
   duplicateScan: DuplicateScan | null;
   latestEvent: AttendanceEventView | null;
   pending: PendingDecision[];
   unknownScan: UnknownScan | null;
+}
+
+/** One member currently inside — a row of the "inside now" panel. */
+export interface InsideMemberRow {
+  /** The check-in time the visit opened at. */
+  at: string | null;
+  memberId: string;
+  name: string;
+  phone: string | null;
+  uniqueId: string | null;
+}
+
+/**
+ * The answer to a desk checkout. `owes` means a shop balance remains and nothing
+ * was closed — the desk has to settle or force it. `checked_out` means done.
+ */
+export interface CheckoutResult {
+  /** What the balance is for; empty once they are out. */
+  items: OwedItem[];
+  name: string;
+  remaining: string;
+  status: "checked_out" | "owes";
 }
 
 /** One member, not one entry: their last visit in the range and how many. */

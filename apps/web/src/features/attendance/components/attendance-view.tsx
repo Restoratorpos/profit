@@ -38,12 +38,14 @@ import { useLocale } from "@/lib/i18n/provider";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   useAttendanceSessions,
+  useCheckoutMember,
   useDecidePending,
   useDoor,
   useRemoveUnknownScan,
 } from "../api";
 import {
   type AttendanceRow,
+  type CheckoutNotice,
   type DoorState,
   dayEnd,
   dayStart,
@@ -53,6 +55,8 @@ import {
   type RangePreset,
   toCsv,
 } from "../types";
+import { type CheckoutTarget, CheckoutDialog } from "./checkout-dialog";
+import { InsideNow } from "./inside-now";
 import { ManualVisitSheet } from "./manual-visit-sheet";
 import { PendingQueue } from "./pending-queue";
 
@@ -81,6 +85,10 @@ export const AttendanceView = ({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  /** The member the confirm-before-checkout dialog is settling, if any. */
+  const [checkoutTarget, setCheckoutTarget] = useState<CheckoutTarget | null>(
+    null
+  );
 
   /*
    * Debounced, because `query` changes on every keystroke and each change is a
@@ -117,6 +125,7 @@ export const AttendanceView = ({
    */
   const doorState = useDoor();
   const door: DoorState = doorState.data ?? {
+    checkoutNotice: null,
     duplicateScan: null,
     latestEvent: null,
     pending: [],
@@ -125,11 +134,34 @@ export const AttendanceView = ({
 
   const decidePending = useDecidePending();
   const removeUnknown = useRemoveUnknownScan();
+  const checkout = useCheckoutMember();
 
   const decidingId = decidePending.isPending
     ? decidePending.variables.sessionId
     : null;
   const isRemovingUnknown = removeUnknown.isPending;
+  const checkoutBusyId = checkout.isPending
+    ? (checkout.variables?.memberId ?? null)
+    : null;
+
+  /*
+   * The door reminder's two ways out. "Pay & check out" opens the settle dialog;
+   * "Check out anyway" walks them out with the tab still open. A member the panel
+   * refused for owing is handed to the same dialog, so both paths meet there.
+   */
+  const handlePayCheckout = (notice: CheckoutNotice) => {
+    setCheckoutTarget({
+      items: notice.items,
+      memberId: notice.memberId,
+      name: notice.name,
+      remaining: notice.remaining,
+      uniqueId: notice.uniqueId,
+    });
+  };
+
+  const handleCheckoutAnyway = (memberId: string) => {
+    checkout.mutate({ force: true, memberId });
+  };
 
   /**
    * The id of the newest scan the page has already seen.
@@ -200,13 +232,18 @@ export const AttendanceView = ({
       <h1 className="sr-only">{messages["attendance.title"]}</h1>
 
       <PendingQueue
+        checkoutBusyId={checkoutBusyId}
         decidingId={decidingId}
         door={door}
         isRemovingUnknown={isRemovingUnknown}
         messages={messages}
+        onCheckoutAnyway={handleCheckoutAnyway}
         onDecide={handleDecide}
+        onPayCheckout={handlePayCheckout}
         onRemoveUnknown={handleRemoveUnknown}
       />
+
+      <InsideNow messages={messages} onOwes={setCheckoutTarget} />
 
       <div className="flex flex-wrap items-center gap-3">
         <p className="whitespace-nowrap">
@@ -417,6 +454,12 @@ export const AttendanceView = ({
         messages={messages}
         onOpenChange={setIsManualOpen}
         open={isManualOpen}
+      />
+
+      <CheckoutDialog
+        messages={messages}
+        onClose={() => setCheckoutTarget(null)}
+        target={checkoutTarget}
       />
     </div>
   );

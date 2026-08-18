@@ -4,6 +4,7 @@ import { toTerminalEvent } from "../lib/hikvision.js";
 import { requireCaller } from "../middleware/caller.js";
 import {
   attendanceQuerySchema,
+  checkoutSchema,
   decidePendingSchema,
   manualVisitSchema,
   recentEventsQuerySchema,
@@ -15,10 +16,12 @@ import {
   updateDeviceSchema,
 } from "../schemas/device.js";
 import {
+  checkoutMember,
   countOpenSessions,
   decidePending,
   ingestTerminalEvent,
   listAttendance,
+  listInsideMembers,
   listRecentEvents,
   readDoorState,
   recordManualVisit,
@@ -202,6 +205,21 @@ export const attendanceRoutes = new Hono<AppEnv>()
   )
   .get("/inside", requireCaller, async (c) =>
     c.json({ count: await countOpenSessions(c.get("gymId")) })
+  )
+  .get("/inside/members", requireCaller, async (c) =>
+    c.json(await listInsideMembers(c.get("gymId")))
+  )
+  .post(
+    "/checkout",
+    requireCaller,
+    zValidator("json", checkoutSchema),
+    async (c) => {
+      const body = c.req.valid("json");
+
+      return c.json(
+        await checkoutMember(c.get("gymId"), body.memberId, body.force)
+      );
+    }
   )
   .get("/door", requireCaller, async (c) =>
     c.json(await readDoorState(c.get("gymId")))

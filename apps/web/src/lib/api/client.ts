@@ -57,13 +57,24 @@ export const toApiError = async (response: Response): Promise<ApiError> => {
  * A dev server proxying to a backend that is not listening will hold a request
  * open rather than refuse it, and the boot sequence waits on exactly such a
  * request. Ten seconds is far beyond a LAN round trip and far below a user's
- * patience for a blank screen.
+ * patience for a blank screen — so reads and the boot refresh use it, and the
+ * offline screen appears promptly.
  */
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/**
+ * Writes get a far longer leash, because it is a backstop against an infinite
+ * hang rather than a latency budget. Registering a member — their membership and
+ * its payment, in one transaction — against a slow remote MySQL can legitimately
+ * take several seconds, and the 10s read cap aborted those mid-flight and
+ * reported a false "signal timed out" on a member the server had in fact saved.
+ */
+const WRITE_TIMEOUT_MS = 30_000;
+
 export const request = (
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS
 ): Promise<Response> => {
   const token = getAccessToken();
 
@@ -77,7 +88,9 @@ export const request = (
     // Sends the httpOnly refresh cookie. Without this the session cannot
     // survive a reload.
     credentials: "include",
-    signal: init.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    // A fresh signal per call — never `init.signal` reused across the 401 retry,
+    // where an already-fired timeout would abort the second attempt instantly.
+    signal: init.signal ?? AbortSignal.timeout(timeoutMs),
   });
 };
 
@@ -209,17 +222,18 @@ const renewedSince = async (generation: number): Promise<boolean> => {
  */
 export const apiFetch = async <T>(
   path: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS
 ): Promise<T> => {
   const generation = tokenGeneration();
-  let response = await request(path, init);
+  let response = await request(path, init, timeoutMs);
 
   if (response.status === 401) {
     if (!(await renewedSince(generation))) {
       throw await toApiError(response);
     }
 
-    response = await request(path, init);
+    response = await request(path, init, timeoutMs);
   }
 
   if (!response.ok) {
@@ -232,16 +246,32 @@ export const apiFetch = async <T>(
     : ((await response.json()) as T);
 };
 
-/** Sugar so feature modules read as intent rather than as fetch options. */
+/*
+ * Sugar so feature modules read as intent rather than as fetch options. Writes
+ * carry the longer timeout — a mutation is the thing that legitimately waits on
+ * a slow remote transaction, where a read that slow is a wedged connection.
+ */
 export const apiPost = <T>(path: string, body: unknown): Promise<T> =>
-  apiFetch<T>(path, { method: "POST", body: JSON.stringify(body) });
+  apiFetch<T>(
+    path,
+    { method: "POST", body: JSON.stringify(body) },
+    WRITE_TIMEOUT_MS
+  );
 
 export const apiPatch = <T>(path: string, body: unknown): Promise<T> =>
-  apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+  apiFetch<T>(
+    path,
+    { method: "PATCH", body: JSON.stringify(body) },
+    WRITE_TIMEOUT_MS
+  );
 
 /** Full replace, as opposed to PATCH's partial one. The backend distinguishes. */
 export const apiPut = <T>(path: string, body: unknown): Promise<T> =>
-  apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) });
+  apiFetch<T>(
+    path,
+    { method: "PUT", body: JSON.stringify(body) },
+    WRITE_TIMEOUT_MS
+  );
 
 export const apiDelete = <T = void>(path: string): Promise<T> =>
-  apiFetch<T>(path, { method: "DELETE" });
+  apiFetch<T>(path, { method: "DELETE" }, WRITE_TIMEOUT_MS);

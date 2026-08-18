@@ -6,7 +6,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { apiFetch, apiPost } from "@/lib/api/client";
-import type { AttendancePage, DoorState } from "./types";
+import type {
+  AttendancePage,
+  CheckoutResult,
+  DoorState,
+  InsideMemberRow,
+} from "./types";
 
 export interface AttendanceFilters {
   from: string;
@@ -21,6 +26,14 @@ export const attendanceKeys = {
   sessions: (filters: AttendanceFilters) =>
     [...attendanceKeys.all, "sessions", filters] as const,
   door: () => [...attendanceKeys.all, "door"] as const,
+  /*
+   * `"members"` is load-bearing, not decoration: the devices feature already
+   * keys its inside-*count* query on `["attendance", "inside"]`, and React Query
+   * keys by value — so without the extra segment this list query and that count
+   * query share one cache entry, and whichever wrote last wins. A persisted
+   * `{ count }` then rehydrates here as the "rows", and `rows.map` throws.
+   */
+  inside: () => [...attendanceKeys.all, "inside", "members"] as const,
 };
 
 /** How often the door is asked what is happening at it. */
@@ -78,9 +91,25 @@ export const doorQuery = queryOptions({
 export const useDoor = () => useQuery(doorQuery);
 
 /**
+ * Who is inside right now, polled alongside the door. Its own key so a checkout
+ * (which removes a row) can settle it without disturbing the sessions table.
+ */
+export const insideQuery = queryOptions({
+  queryKey: attendanceKeys.inside(),
+  queryFn: () => apiFetch<InsideMemberRow[]>("/attendance/inside/members"),
+  refetchInterval: DOOR_POLL_MS,
+  staleTime: 0,
+});
+
+export const useInsideMembers = () => useQuery(insideQuery);
+
+/**
  * Deciding a scan changes both the queue and the day's visit list, so every
  * write settles the whole feature. Members too: an accepted visit counts down
  * a membership's remaining entries.
+ *
+ * Orders are settled as well: a checkout can take a shop payment, and the door
+ * reminder reads the same order-debt figure the orders screen does.
  */
 const useSettleAttendance = () => {
   const queryClient = useQueryClient();
@@ -88,6 +117,7 @@ const useSettleAttendance = () => {
   return () => {
     queryClient.invalidateQueries({ queryKey: attendanceKeys.all });
     queryClient.invalidateQueries({ queryKey: ["members"] });
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
   };
 };
 
@@ -122,6 +152,46 @@ export const useRecordManualVisit = () => {
   return useMutation({
     mutationFn: (memberId: string) =>
       apiPost<void>("/attendance/manual", { memberId }),
+    onSuccess: settle,
+  });
+};
+
+/**
+ * Checks a member out. Without `force` the server refuses to close a visit while
+ * shop orders are outstanding and hands back `{ status: "owes", remaining }`, so
+ * the desk can settle first or send `force` to walk them out with the tab open.
+ */
+export const useCheckoutMember = () => {
+  const settle = useSettleAttendance();
+
+  return useMutation({
+    mutationFn: (input: { force?: boolean; memberId: string }) =>
+      apiPost<CheckoutResult>("/attendance/checkout", {
+        force: input.force ?? false,
+        memberId: input.memberId,
+      }),
+    onSuccess: settle,
+  });
+};
+
+/**
+ * Settles a member's outstanding shop balance from the checkout reminder — the
+ * same `/orders` endpoint the orders drawer pays through, so the two can never
+ * disagree about the balance.
+ */
+export const usePayCheckoutOrders = () => {
+  const settle = useSettleAttendance();
+
+  return useMutation({
+    mutationFn: (input: {
+      amount: string;
+      memberId: string;
+      paymentType: "card" | "cash";
+    }) =>
+      apiPost<unknown>(`/orders/member/${input.memberId}/pay`, {
+        amount: input.amount,
+        paymentType: input.paymentType,
+      }),
     onSuccess: settle,
   });
 };

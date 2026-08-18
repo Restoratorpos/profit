@@ -90,11 +90,15 @@ export const memberRoutes = new Hono<AppEnv>()
   })
   /*
    * Deleting takes the face off every terminal first — see deleteMember. It is
-   * refused outright for a member with money on record, so the common case is a
-   * row created by mistake rather than a person with a history.
+   * refused for a member with money on record unless `?force=true`, which purges
+   * their ledger with them — the operator overriding the guard on a test row.
    */
   .delete("/:memberId", async (c) => {
-    await deleteMember(c.get("gymId"), c.req.param("memberId"));
+    await deleteMember(
+      c.get("gymId"),
+      c.req.param("memberId"),
+      c.req.query("force") === "true"
+    );
 
     return c.body(null, 204);
   })

@@ -1,4 +1,15 @@
 import { formatPhone } from "@repo/auth/lib/countries";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@repo/design-system/components/ui/alert-dialog";
 import { Badge } from "@repo/design-system/components/ui/badge";
 import { Button } from "@repo/design-system/components/ui/button";
 import {
@@ -31,16 +42,19 @@ import {
   TableHeader,
   TableRow,
 } from "@repo/design-system/components/ui/table";
+import { SELECTED_TINT } from "@repo/design-system/lib/selected";
 import { cn } from "@repo/design-system/lib/utils";
 import {
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   DownloadIcon,
   LayersIcon,
+  ListFilterIcon,
   MoreVerticalIcon,
   PencilIcon,
-  PlusCircleIcon,
   SearchIcon,
+  Trash2Icon,
   UserPlusIcon,
   XIcon,
 } from "lucide-react";
@@ -49,6 +63,7 @@ import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import { IdCode } from "@/components/id-code";
 import { PAGE_SIZES } from "@/components/use-pagination";
 import { type MemberOrderSummary, OrderDetailSheet } from "@/features/orders";
+import { ApiError } from "@/lib/api/client";
 import { formatDate } from "@/lib/date";
 import { formatMoney } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/config";
@@ -354,6 +369,12 @@ export const MembersView = ({
   const [viewing, setViewing] = useState<MemberListItem | null>(null);
   const [viewingShop, setViewingShop] = useState<MemberListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * A member the money guard refused. Deleting them is possible — it just also
+   * purges their ledger — so the refusal becomes a second, louder confirm rather
+   * than a dead end.
+   */
+  const [forceTarget, setForceTarget] = useState<MemberListItem | null>(null);
 
   /*
    * Two copies of the query on purpose. `request` moves on every keystroke so
@@ -411,9 +432,36 @@ export const MembersView = ({
    */
   const handleDelete = (member: MemberListItem) => {
     setError(null);
-    deleteMember.mutate(member.id, {
-      onError: (cause) => setError(cause.message),
-    });
+    deleteMember.mutate(
+      { memberId: member.id },
+      {
+        onError: (cause) => {
+          // A money-on-record refusal is not a dead end — offer to purge it.
+          // Anything else is a real failure and lands in the alert as before.
+          if (cause instanceof ApiError && cause.status === 409) {
+            setForceTarget(member);
+            return;
+          }
+
+          setError(cause.message);
+        },
+      }
+    );
+  };
+
+  const handleForceDelete = () => {
+    if (!forceTarget) {
+      return;
+    }
+
+    const member = forceTarget;
+
+    setForceTarget(null);
+    setError(null);
+    deleteMember.mutate(
+      { force: true, memberId: member.id },
+      { onError: (cause) => setError(cause.message) }
+    );
   };
 
   /*
@@ -499,21 +547,24 @@ export const MembersView = ({
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              {/* Once it holds something, what it holds *is* the label — the
-                  word "Qarz" beside "Qarzdorlar" only repeated it. It stays as
-                  the accessible name so the control is still announced. */}
+              {/* Dressed as the select beside it — funnel, label, chevron — because
+                  it does the same job. A ⊕ read as "add a debt", which is an
+                  entirely plausible thing for a gym screen to offer and the exact
+                  opposite of what pressing it does.
+
+                  Once it holds something, what it holds *is* the label — the word
+                  "Qarz" beside "Qarzdorlar" only repeated it. It stays as the
+                  accessible name so the control is still announced. */}
               <Button
                 aria-label={messages["members.debtFilter"]}
+                className={cn(request.debt !== null && SELECTED_TINT)}
                 variant="outline"
               >
-                <PlusCircleIcon className="size-5 text-muted-foreground" />
-                {request.debt === null ? (
-                  messages["members.debtFilter"]
-                ) : (
-                  <Badge variant="secondary">
-                    {messages[DEBT_LABEL[request.debt]]}
-                  </Badge>
-                )}
+                <ListFilterIcon className="size-5 text-muted-foreground" />
+                {request.debt === null
+                  ? messages["members.debtFilter"]
+                  : messages[DEBT_LABEL[request.debt]]}
+                <ChevronDownIcon className="size-4 shrink-0 opacity-70" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -688,7 +739,7 @@ export const MembersView = ({
                         <DeleteConfirmButton
                           isPending={
                             deleteMember.isPending &&
-                            deleteMember.variables === member.id
+                            deleteMember.variables?.memberId === member.id
                           }
                           itemName={member.name}
                           messages={messages}
@@ -853,6 +904,45 @@ export const MembersView = ({
         }}
         summary={viewingShop ? toDebtor(viewingShop) : null}
       />
+
+      {/* The override: shown only after the money guard refused a delete. It
+          spells out that the ledger goes too, because that is the difference
+          between this and the ordinary confirm. */}
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setForceTarget(null);
+          }
+        }}
+        open={forceTarget !== null}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              {messages["members.forceDeleteTitle"]}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="block font-medium text-foreground">
+                {forceTarget?.name}
+              </span>
+              {messages["members.forceDeleteBody"]}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>{messages["common.cancel"]}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleForceDelete}
+              variant="destructive"
+            >
+              {messages["members.deleteAnyway"]}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

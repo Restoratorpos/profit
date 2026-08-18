@@ -45,3 +45,15 @@ export const manualVisitSchema = z.object({
 });
 
 export type ManualVisitInput = z.infer<typeof manualVisitSchema>;
+
+/**
+ * Checking a member out from the desk. `force` skips the outstanding-orders
+ * confirmation — it is what "Check out anyway" and the close after a payment
+ * both send. Defaulted so a plain checkout omits it.
+ */
+export const checkoutSchema = z.object({
+  force: z.boolean().default(false),
+  memberId: z.string().trim().min(1).max(20),
+});
+
+export type CheckoutInput = z.infer<typeof checkoutSchema>;

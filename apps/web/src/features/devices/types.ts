@@ -44,6 +44,8 @@ export interface AttendanceEventView {
   personType: string | null;
   source: string | null;
   time: string | null;
+  /** The member's own code (`A06`); null for staff, who carry no code. */
+  uniqueId: string | null;
 }
 
 export interface SyncResult {

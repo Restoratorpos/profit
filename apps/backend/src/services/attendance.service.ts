@@ -26,6 +26,12 @@ import {
 } from "../db/schema.js";
 import { ConflictError, NotFoundError } from "../lib/errors.js";
 import type { TerminalEvent } from "../lib/hikvision.js";
+import {
+  memberOrderRemaining,
+  memberOwedItems,
+  type OwedItem,
+  SETTLED_EPSILON,
+} from "./order.service.js";
 
 /**
  * Turning a scan into attendance.
@@ -71,6 +77,8 @@ const toDateString = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
     date.getDate()
   ).padStart(2, "0")}`;
+
+const toMoney = (value: number): string => value.toFixed(2);
 
 const minutesBetween = (from: Date, to: Date): number =>
   Math.max(0, Math.round((to.getTime() - from.getTime()) / 60_000));
@@ -168,6 +176,8 @@ interface CredentialOwner {
   name: string;
   personId: string;
   personType: PersonType;
+  /** The member's own code (`A06`); null for staff, who carry no code. */
+  uniqueId: string | null;
 }
 
 /**
@@ -219,12 +229,17 @@ export const resolveCredential = async (
       name: worker.name ?? "",
       personId: row.ownerId,
       personType,
+      uniqueId: null,
     };
   }
 
   const [member] = await db
     // A member's branch column is `home_branch`, not `branch_id`.
-    .select({ branchId: members.homeBranch, name: members.fullname })
+    .select({
+      branchId: members.homeBranch,
+      name: members.fullname,
+      uniqueId: members.uniqueId,
+    })
     .from(members)
     .where(and(eq(members.gymId, gymId), eq(members.memberId, row.ownerId)))
     .limit(1);
@@ -239,17 +254,45 @@ export const resolveCredential = async (
     name: member.name ?? "",
     personId: row.ownerId,
     personType,
+    uniqueId: member.uniqueId,
   };
 };
 
 /**
- * Two scans of the same face a few seconds apart are one arrival, not two — a
- * MinMoe will happily read somebody twice while they pull the door open. Only
- * the first inside this window counts.
+ * Two reads of the same face a moment apart are one arrival, not an arrival and
+ * a departure — a MinMoe will happily read somebody twice while they pull the
+ * door open. Only the first inside this window counts.
+ *
+ * It is deliberately **short**. This was a minute, from when members only ever
+ * scanned in and the only thing a second scan could be was noise. Now that a
+ * single "both" door toggles them out, that minute swallowed the scan a member
+ * makes on the way past the terminal — the desk saw "already scanned, no visit
+ * added" and the member stayed inside until the day rolled the session closed.
+ * A terminal re-reads a face within a few seconds or not at all, so the window
+ * only has to cover that.
  */
-const DEBOUNCE_MS = 60_000;
+const DOOR_REPEAT_MS = 10_000;
 
-const hasRecentEvent = async (
+/**
+ * Whether this scan changes nothing, either because the door read the same face
+ * twice or because it is history we already hold.
+ *
+ * The comparison is **signed**, not absolute. Anything not newer than the last
+ * event we stored for that person is a replay: a live scan is always the newest
+ * thing that has happened to them, so a stamp at or before the one on file is
+ * `syncEvents` re-reading the buffer the terminal still keeps. That matters more
+ * now that members scan both ways — an absolute window compares against the
+ * newest stored event only, so re-syncing an in-then-out pair read the older
+ * "in" as a fresh arrival and opened a second visit.
+ *
+ * Pure and exported so the rule can be tested without a door, the same as
+ * `memberScanIsDeparture`.
+ */
+export const isDoorRepeat = (previous: Date | null, at: Date): boolean =>
+  previous !== null && at.getTime() - previous.getTime() < DOOR_REPEAT_MS;
+
+/** `isDoorRepeat` against the newest event on file for that person. */
+const isRepeatScan = async (
   gymId: string,
   personType: PersonType,
   personId: string,
@@ -268,13 +311,7 @@ const hasRecentEvent = async (
     .orderBy(desc(attendanceEvents.eventTime))
     .limit(1);
 
-  if (!row?.eventTime) {
-    return false;
-  }
-
-  const previous = new Date(row.eventTime).getTime();
-
-  return Math.abs(at.getTime() - previous) < DEBOUNCE_MS;
+  return isDoorRepeat(row?.eventTime ? new Date(row.eventTime) : null, at);
 };
 
 /**
@@ -558,6 +595,34 @@ export interface DuplicateScan {
   reason: "debounce" | "inside";
 }
 
+/**
+ * A member scanned out at the door while still owing money on shop/bar orders.
+ * The session is **not** closed on the spot: the desk has to see the tab and
+ * decide — settle it, or wave them out with it still open. Held in memory like
+ * the other door notices, because it describes somebody at the door right now,
+ * and is cleared the moment the desk answers it (or the day rolls the session
+ * closed on its own).
+ *
+ * It is order debt only. What a member owes on their membership never appears
+ * here — that is a renewal conversation, not a "before you leave" one.
+ */
+export interface CheckoutNotice {
+  at: string;
+  deviceName: string | null;
+  /**
+   * What the balance is made of, most-bought first. A figure alone makes the desk
+   * open the drawer to answer "for what?", which is the question the member
+   * standing in front of them has already asked.
+   */
+  items: OwedItem[];
+  memberId: string;
+  name: string;
+  /** Outstanding shop/bar balance, a decimal string. Always over the epsilon. */
+  remaining: string;
+  /** The member's own code (`A06`), for the banner. */
+  uniqueId: string | null;
+}
+
 /** Long enough for the desk to look up, short enough to stay "just now". */
 const UNKNOWN_SCAN_TTL_MS = 10 * 60_000;
 
@@ -567,8 +632,19 @@ const UNKNOWN_SCAN_TTL_MS = 10 * 60_000;
  */
 const DUPLICATE_SCAN_TTL_MS = 2 * 60_000;
 
+/**
+ * The desk is looking at somebody standing there, tab in hand — long enough to
+ * read it and act, short enough that a stale one never lingers past the visit.
+ */
+const CHECKOUT_NOTICE_TTL_MS = 3 * 60_000;
+
 const unknownScans = new Map<string, UnknownScan>();
 const duplicateScans = new Map<string, DuplicateScan>();
+const checkoutNotices = new Map<string, CheckoutNotice>();
+
+export const clearCheckoutNotice = (gymId: string): void => {
+  checkoutNotices.delete(gymId);
+};
 
 /**
  * The notice still worth showing, or null.
@@ -610,6 +686,18 @@ export type IngestOutcome =
   | { direction: Direction; name: string; status: "recorded" }
   /** A member who is already counted in for today. Nothing was written. */
   | { name: string; status: "inside" }
+  /**
+   * A member scanned out but owes on shop/bar orders. The session is left open;
+   * the desk settles or waves them through. Carries the tab for the banner.
+   */
+  | {
+      /** What the tab is made of, so the desk can read it out at the door. */
+      items: OwedItem[];
+      memberId: string;
+      name: string;
+      remaining: string;
+      status: "checkout_owes";
+    }
   | { reason: "duplicate" | "unknown_credential"; status: "ignored" }
   | {
       name: string;
@@ -622,6 +710,8 @@ export type IngestOutcome =
 /** A session parked for a human decision, rather than counted as a visit. */
 const PENDING_STATUS = "pending";
 const REJECTED_STATUS = "rejected";
+/** A visit that ended — they scanned out, or the desk checked them out. */
+const CLOSED_STATUS = "closed";
 
 /**
  * The member's session for the day this scan happened on, whatever state it is
@@ -651,6 +741,42 @@ const memberSessionToday = async (
         eq(attendanceSessions.personId, memberId),
         eq(attendanceSessions.workDate, toDateString(at)),
         ne(attendanceSessions.status, REJECTED_STATUS)
+      )
+    )
+    .orderBy(desc(attendanceSessions.checkIn))
+    .limit(1);
+
+  return session ?? null;
+};
+
+/**
+ * The member's session that is still **open today** — checked in, not yet out.
+ * This, not any-day `openSessionOf`, is what a departure closes: a session left
+ * open from yesterday is a stale arrival to be closed on the way in (which
+ * `admitMember` does), never a checkout of a visit that ended hours ago.
+ *
+ * Only `status = "open"` counts — a `pending` row also has a null check-out, but
+ * it is a scan still waiting on a door decision, not a visit to end.
+ */
+const openMemberSessionToday = async (
+  gymId: string,
+  memberId: string,
+  at: Date
+): Promise<{ checkIn: Date | null; sessionId: number } | null> => {
+  const [session] = await db
+    .select({
+      checkIn: attendanceSessions.checkIn,
+      sessionId: attendanceSessions.sessionId,
+    })
+    .from(attendanceSessions)
+    .where(
+      and(
+        eq(attendanceSessions.gymId, gymId),
+        eq(attendanceSessions.personType, "member"),
+        eq(attendanceSessions.personId, memberId),
+        eq(attendanceSessions.workDate, toDateString(at)),
+        eq(attendanceSessions.status, "open"),
+        isNull(attendanceSessions.checkOut)
       )
     )
     .orderBy(desc(attendanceSessions.checkIn))
@@ -725,24 +851,95 @@ const parkForDecision = async (mark: AttendanceMark): Promise<number> => {
 };
 
 /**
- * The last-resort reading of a scan, when neither the reader nor the device
- * said which way somebody was going.
+ * The last-resort reading of a worker's scan, when neither the reader nor the
+ * device said which way they were going: an open shift means they are leaving,
+ * none means they are arriving.
  *
- * It is not applied to members at all. They do not scan out here: they come in,
- * train, and walk past the terminal on the way out without looking at it.
- * Reading their second scan as a departure is how a visit turns into a
- * check-out nobody asked for. Only a reader that is explicitly an exit, or a
- * device reporting its own check-out status, takes a member back out.
+ * Members are **not** routed through here — `handleMemberScan` owns their
+ * direction, because "arrival" for a member also means an access check and a
+ * counted visit, and "departure" now means the order-debt reminder. See there
+ * for why a single "both" door toggles a member the same way it toggles staff.
  */
-const toggledDirection = (
-  personType: PersonType,
-  openSession: unknown
-): Direction => {
-  if (personType === "member") {
-    return "in";
+const toggledDirection = (openSession: unknown): Direction =>
+  openSession ? "out" : "in";
+
+/**
+ * What an arrival scan means, given the session the member already has today —
+ * `null` when they have none.
+ *
+ * Pure and exported so the rule can be tested without a door, the same as
+ * `memberScanIsDeparture`. The case worth naming is `closed`: they checked out
+ * and came back, which is an arrival and not a repeat. Reading it as a repeat is
+ * exactly the bug this replaced — the desk saw "already counted today" while the
+ * member walked back in past a panel that said they had left.
+ *
+ * Anything else with a session today (an `open` one, or a status this code does
+ * not know) is `inside`: refusing to write is always the safe answer, because
+ * the visit it would open is one the member already has.
+ */
+export const memberArrivalOf = (
+  todayStatus: string | null
+): "admit" | "inside" | "pending" | "readmit" => {
+  if (todayStatus === null) {
+    return "admit";
   }
 
-  return openSession ? "out" : "in";
+  if (todayStatus === PENDING_STATUS) {
+    return "pending";
+  }
+
+  return todayStatus === CLOSED_STATUS ? "readmit" : "inside";
+};
+
+/**
+ * A member coming back in on a day they have already been let in on: they
+ * checked out, went to the shop or their car, and walked back through the door.
+ *
+ * This opens a **fresh visit** rather than refusing them. Refusing was the old
+ * behaviour and it was wrong in the most visible way possible — the desk saw
+ * "already counted today", the member was standing inside the gym while the
+ * "inside now" panel said they had left, and only the next day fixed it.
+ *
+ * What it deliberately does **not** do:
+ *
+ * - **Count the visit again.** `countVisit` is not called. A visit-billed pass
+ *   pays for a day, not for a door, and charging somebody twice for stepping out
+ *   to their car is the one thing the old refusal got right.
+ * - **Re-run the access check.** They were already judged and admitted today, on
+ *   this membership. Re-judging would park a member with one visit left in the
+ *   pending queue for `no_visits` — a refusal caused by the entry we just let
+ *   them have.
+ *
+ * The visits table therefore counts entries, not days: somebody who steps out
+ * and back shows two. That is what happened, and the number that has to stay
+ * honest — the one they are billed on — is the pass, which moved once.
+ */
+const readmitMember = async ({
+  gymId,
+  mark,
+  openSession,
+  owner,
+}: {
+  gymId: string;
+  mark: AttendanceMark;
+  openSession: { checkIn: Date | null; sessionId: number } | null;
+  owner: CredentialOwner;
+}): Promise<IngestOutcome> => {
+  // A visit still open from another day, while today's is closed. Left standing
+  // it would keep them "inside now" forever, under yesterday's date.
+  if (openSession) {
+    await closeStaleSession(openSession);
+  }
+
+  await db.transaction(async (tx) => {
+    await recordCheckIn(tx, mark);
+  });
+
+  // Whatever they owed when they walked out is a question for the next
+  // checkout, not something to keep on screen while they are back inside.
+  clearCheckoutNotice(gymId);
+
+  return { direction: "in", name: owner.name, status: "recorded" };
 };
 
 /**
@@ -774,27 +971,29 @@ const admitMember = async ({
   );
 
   /*
-   * Already dealt with today, one way or the other. Nothing is written: a
-   * second visit would count their pass down twice for one day, and a second
-   * pending row would put the same person in the queue twice while they stand
-   * at the door waiting for the first answer.
+   * Already dealt with today, one way or the other. A second pending row would
+   * put the same person in the queue twice while they stand at the door waiting
+   * for the first answer, and a scan while they are still inside is not a second
+   * arrival — it is the same one.
    */
-  if (today) {
-    if (today.status === PENDING_STATUS) {
-      const waiting = await evaluateMemberAccess(
-        gymId,
-        owner.personId,
-        event.eventTime
-      );
+  const arrival = memberArrivalOf(today ? (today.status ?? "") : null);
 
-      return {
-        name: owner.name,
-        reason: waiting.reason ?? "no_membership",
-        sessionId: today.sessionId,
-        status: "pending",
-      };
-    }
+  if (arrival === "pending" && today) {
+    const waiting = await evaluateMemberAccess(
+      gymId,
+      owner.personId,
+      event.eventTime
+    );
 
+    return {
+      name: owner.name,
+      reason: waiting.reason ?? "no_membership",
+      sessionId: today.sessionId,
+      status: "pending",
+    };
+  }
+
+  if (arrival === "inside") {
     duplicateScans.set(gymId, {
       at: event.eventTime.toISOString(),
       deviceName,
@@ -803,6 +1002,10 @@ const admitMember = async ({
     });
 
     return { name: owner.name, status: "inside" };
+  }
+
+  if (arrival === "readmit") {
+    return await readmitMember({ gymId, mark, openSession, owner });
   }
 
   // Yesterday's visit, still open because they never scanned out. Closing it
@@ -833,6 +1036,117 @@ const admitMember = async ({
   });
 
   return { direction: "in", name: owner.name, status: "recorded" };
+};
+
+/**
+ * Whether a member's scan is a departure, given how the reader is wired and
+ * whether a visit is still open for them today.
+ *
+ * Pure and exported so the toggle rule can be tested without a door. A dedicated
+ * entry reader is never a way out, even mid-visit, so a two-door gym cannot read
+ * a second entry scan as somebody walking out. A dedicated exit reader always is.
+ * A single "both" door has no side, so it toggles: a scan while a visit is open
+ * is a departure, and the first scan of the day (nothing open) is an arrival.
+ *
+ * The terminal's own per-scan check-in/check-out label is deliberately **not**
+ * consulted. A face box in access-control mode reports the same status on every
+ * scan — a fixed "check-in", or just "granted" — so trusting it recorded every
+ * member's scan as an arrival and made checking out at a single door impossible.
+ * Only how the reader is configured (`device.direction`) decides a side.
+ */
+export const memberScanIsDeparture = (
+  fromDevice: Direction | null,
+  hasOpenSessionToday: boolean
+): boolean => {
+  if (!hasOpenSessionToday) {
+    return false;
+  }
+
+  return fromDevice !== "in";
+};
+
+/**
+ * A member's scan, both ways.
+ *
+ * Departure exists for members now, so their direction is decided by
+ * `memberScanIsDeparture` rather than the generic worker toggle. Everything that
+ * is not a departure is an arrival, which is where the access check and the
+ * counted visit live (`admitMember`).
+ *
+ * A departure while the member owes on shop/bar orders does **not** close the
+ * session. It raises a checkout notice and returns `checkout_owes`, leaving the
+ * desk to settle the tab or wave them out with it — see `checkoutMember`. A
+ * clean departure closes the visit on the spot.
+ */
+const handleMemberScan = async ({
+  deviceName,
+  event,
+  fromDevice,
+  gymId,
+  mark,
+  openSession,
+  owner,
+}: {
+  deviceName: string | null;
+  event: TerminalEvent;
+  fromDevice: Direction | null;
+  gymId: string;
+  mark: AttendanceMark;
+  openSession: { checkIn: Date | null; sessionId: number } | null;
+  owner: CredentialOwner;
+}): Promise<IngestOutcome> => {
+  const todayOpen = await openMemberSessionToday(
+    gymId,
+    owner.personId,
+    event.eventTime
+  );
+
+  if (todayOpen && memberScanIsDeparture(fromDevice, true)) {
+    const remaining = await memberOrderRemaining(gymId, owner.personId);
+
+    if (remaining > SETTLED_EPSILON) {
+      // Only once there is something to explain. A member who owes nothing walks
+      // out without this costing a query.
+      const items = await memberOwedItems(gymId, owner.personId);
+
+      // Confirm-before-checkout: leave the visit open and put the tab in front
+      // of the desk. Nothing is written — the departure is not committed yet.
+      checkoutNotices.set(gymId, {
+        at: event.eventTime.toISOString(),
+        deviceName,
+        items,
+        memberId: owner.personId,
+        name: owner.name,
+        remaining: toMoney(remaining),
+        uniqueId: owner.uniqueId,
+      });
+
+      return {
+        items,
+        memberId: owner.personId,
+        name: owner.name,
+        remaining: toMoney(remaining),
+        status: "checkout_owes",
+      };
+    }
+
+    // Nothing owed, the ordinary case: the visit closes here.
+    await db.transaction(async (tx) => {
+      await recordCheckOut(tx, mark, todayOpen);
+    });
+    clearCheckoutNotice(gymId);
+
+    return { direction: "out", name: owner.name, status: "recorded" };
+  }
+
+  return await admitMember({
+    deviceName,
+    event,
+    gymId,
+    mark,
+    openSession,
+    owner,
+  });
 };
 
 /**
@@ -880,12 +1194,7 @@ export const ingestTerminalEvent = async (
   }
 
   if (
-    await hasRecentEvent(
-      gymId,
-      owner.personType,
-      owner.personId,
-      event.eventTime
-    )
+    await isRepeatScan(gymId, owner.personType, owner.personId, event.eventTime)
   ) {
     duplicateScans.set(gymId, {
       at: event.eventTime.toISOString(),
@@ -918,9 +1227,6 @@ export const ingestTerminalEvent = async (
       : null;
   })();
 
-  const direction: Direction =
-    fromDevice ?? fromEvent ?? toggledDirection(owner.personType, session);
-
   const mark: AttendanceMark = {
     branchId: owner.branchId ?? device.branchId,
     credentialId: owner.credentialId,
@@ -932,12 +1238,14 @@ export const ingestTerminalEvent = async (
     time: event.eventTime,
   };
 
-  // A member arriving has to be entitled to; a member of staff clocking on does
-  // not. The check runs only on the way in — nobody is ever stopped from leaving.
-  if (owner.personType === "member" && direction === "in") {
-    const outcome = await admitMember({
+  // A member's scan has rules a worker's does not — an access check on the way
+  // in, an order-debt reminder on the way out — so it gets its own path. Nobody
+  // is ever stopped from leaving; the reminder does not block the door.
+  if (owner.personType === "member") {
+    const outcome = await handleMemberScan({
       deviceName: device.deviceName ?? null,
       event,
+      fromDevice,
       gymId,
       mark,
       openSession: session,
@@ -948,6 +1256,11 @@ export const ingestTerminalEvent = async (
 
     return outcome;
   }
+
+  // A member of staff clocking on or off: the toggle is the fallback when
+  // neither the reader nor the device said which way they were going.
+  const direction: Direction =
+    fromDevice ?? fromEvent ?? toggledDirection(session);
 
   await db.transaction(async (tx) => {
     if (direction === "out" && session) {
@@ -989,6 +1302,8 @@ export interface AttendanceEventView {
   personType: string | null;
   source: string | null;
   time: string | null;
+  /** The member's own code (`A06`); null for staff, who carry no `unique_id`. */
+  uniqueId: string | null;
 }
 
 /** The recent scans, newest first — what the terminals screen shows live. */
@@ -1001,6 +1316,7 @@ export const listRecentEvents = async (
       deviceName: devices.deviceName,
       direction: attendanceEvents.direction,
       id: attendanceEvents.eventId,
+      memberCode: members.uniqueId,
       memberName: members.fullname,
       personId: attendanceEvents.personId,
       personType: attendanceEvents.personType,
@@ -1037,6 +1353,7 @@ export const listRecentEvents = async (
     personType: row.personType,
     source: row.source,
     time: row.time ? new Date(row.time).toISOString() : null,
+    uniqueId: row.memberCode,
   }));
 };
 
@@ -1109,6 +1426,8 @@ export const listPendingDecisions = async (
 };
 
 export interface DoorState {
+  /** A member who scanned out owing on shop orders, waiting to be settled. */
+  checkoutNotice: CheckoutNotice | null;
   /** The same person again, inside the debounce — a scan that changed nothing. */
   duplicateScan: DuplicateScan | null;
   /** The newest scan any terminal reported, whoever it was. */
@@ -1132,6 +1451,7 @@ export const readDoorState = async (gymId: string): Promise<DoorState> => {
   ]);
 
   return {
+    checkoutNotice: readFresh(checkoutNotices, gymId, CHECKOUT_NOTICE_TTL_MS),
     duplicateScan: readFresh(duplicateScans, gymId, DUPLICATE_SCAN_TTL_MS),
     latestEvent: events[0] ?? null,
     pending,
@@ -1398,6 +1718,139 @@ export const recordManualVisit = async (
         )
       );
   });
+};
+
+export interface InsideMemberRow {
+  /** When the visit opened — the check-in time. */
+  at: string | null;
+  memberId: string;
+  name: string;
+  phone: string | null;
+  /** The member's own code (`A06`), what the desk calls them by. */
+  uniqueId: string | null;
+}
+
+/**
+ * The members inside right now — checked in with no check-out yet. What the
+ * "inside now" panel reads so the desk can check somebody out by hand: the
+ * terminal is not the only way out, and a member who never scans on the way past
+ * it would otherwise sit "inside" until the day rolled their session closed.
+ */
+export const listInsideMembers = async (
+  gymId: string
+): Promise<InsideMemberRow[]> => {
+  const rows = await db
+    .select({
+      at: attendanceSessions.checkIn,
+      memberId: attendanceSessions.personId,
+      name: members.fullname,
+      phone: members.phone,
+      uniqueId: members.uniqueId,
+    })
+    .from(attendanceSessions)
+    .leftJoin(members, eq(members.memberId, attendanceSessions.personId))
+    .where(
+      and(
+        eq(attendanceSessions.gymId, gymId),
+        eq(attendanceSessions.personType, "member"),
+        eq(attendanceSessions.status, "open"),
+        isNull(attendanceSessions.checkOut)
+      )
+    )
+    .orderBy(desc(attendanceSessions.checkIn));
+
+  return rows.map((row) => ({
+    at: toIsoDate(row.at),
+    memberId: row.memberId ?? "",
+    name: row.name ?? "",
+    phone: row.phone,
+    uniqueId: row.uniqueId,
+  }));
+};
+
+export interface CheckoutResult {
+  /** What the balance is for. Empty once they are out — there is nothing to ask. */
+  items: OwedItem[];
+  name: string;
+  /** The order balance the desk was warned about, or `"0.00"` once it is out. */
+  remaining: string;
+  /**
+   * `owes` — a balance remains and `force` was not set, so nothing was closed and
+   * the desk must decide. `checked_out` — the visit is closed.
+   */
+  status: "checked_out" | "owes";
+}
+
+/**
+ * Checks a member out from the desk, closing their open visit.
+ *
+ * The same confirm-before-checkout rule the terminal follows: if they owe on
+ * shop/bar orders and `force` is not set, nothing is closed and the balance is
+ * returned so the desk can settle it first or wave them out. Order debt only —
+ * a membership balance never stops anyone leaving.
+ *
+ * `force` is what "Check out anyway" and a post-payment close both send: once the
+ * tab is paid the balance is zero and the guard passes on its own, but the button
+ * that walks them out with a tab still open has to say so explicitly.
+ *
+ * No operator is recorded, the same as a check-in and a face at the door — a mark
+ * carries no actor either way, so a desk checkout takes none.
+ */
+export const checkoutMember = async (
+  gymId: string,
+  memberId: string,
+  force: boolean
+): Promise<CheckoutResult> => {
+  const [member] = await db
+    .select({ branchId: members.homeBranch, name: members.fullname })
+    .from(members)
+    .where(and(eq(members.gymId, gymId), eq(members.memberId, memberId)))
+    .limit(1);
+
+  if (!member) {
+    throw new NotFoundError("Member not found");
+  }
+
+  const session = await openSessionOf(gymId, "member", memberId);
+
+  if (!session) {
+    throw new ConflictError("Member is not checked in");
+  }
+
+  const remaining = await memberOrderRemaining(gymId, memberId);
+
+  if (remaining > SETTLED_EPSILON && !force) {
+    return {
+      items: await memberOwedItems(gymId, memberId),
+      name: member.name ?? "",
+      remaining: toMoney(remaining),
+      status: "owes",
+    };
+  }
+
+  await db.transaction(async (tx) => {
+    await recordCheckOut(
+      tx,
+      {
+        branchId: member.branchId ?? null,
+        gymId,
+        personId: memberId,
+        personType: "member",
+        source: "manual",
+        time: new Date(),
+      },
+      { checkIn: session.checkIn, sessionId: session.sessionId }
+    );
+  });
+
+  clearCheckoutNotice(gymId);
+
+  return {
+    items: [],
+    name: member.name ?? "",
+    remaining: toMoney(0),
+    status: "checked_out",
+  };
 };
 
 /** How many people are inside right now, for the terminals screen header. */

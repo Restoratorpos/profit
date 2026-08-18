@@ -495,6 +495,100 @@ export const getMemberOrderDetail = async (
 };
 
 /**
+ * A buyer's outstanding shop/bar balance as a single number — the sum still owed
+ * across their unsettled orders, net of what has been paid. This is the figure
+ * the attendance checkout reminder shows: it is **order** debt only, and has
+ * nothing to do with what a member owes on their membership.
+ *
+ * Reuses the same open-orders and paid-per-order reads the pay flow does, so the
+ * reminder and the pay drawer can never quote two different balances.
+ */
+export const memberOrderRemaining = async (
+  gymId: string,
+  userId: string,
+  type: DebtorType = "member"
+): Promise<number> => {
+  const openOrders = await loadOpenMemberOrders(gymId, userId, type);
+
+  if (openOrders.length === 0) {
+    return 0;
+  }
+
+  const paidByOrder = await loadPaidByOrder(
+    gymId,
+    openOrders.map((row) => row.id)
+  );
+
+  return openOrders.reduce(
+    (sum, row) =>
+      sum + Math.max(toNumber(row.total) - (paidByOrder.get(row.id) ?? 0), 0),
+    0
+  );
+};
+
+/** One thing a buyer has not paid for, collapsed across their open orders. */
+export interface OwedItem {
+  name: string;
+  /** Summed across every unsettled order — two visits to the bar make one line. */
+  quantity: number;
+}
+
+/**
+ * How many lines the checkout reminder carries. A tab at a gym bar is a handful
+ * of things; a list long enough to scroll is one nobody reads at a door, and the
+ * pay drawer behind the reminder holds the full breakdown either way.
+ */
+const OWED_ITEM_LIMIT = 8;
+
+/**
+ * What a buyer's unsettled orders were actually *for*.
+ *
+ * The balance alone tells the desk that somebody owes 250,000; it does not tell
+ * them what for, which is the first thing the person standing at the door asks.
+ * Collapsed by name rather than listed per order, because "2 × Snickers" is what
+ * was bought and which order it landed on is not the question at a checkout.
+ *
+ * Reuses the same unsettled-order scope the balance does, so the reminder can
+ * never list items from an order the figure beside them does not include.
+ */
+export const memberOwedItems = async (
+  gymId: string,
+  userId: string,
+  type: DebtorType = "member"
+): Promise<OwedItem[]> => {
+  const openOrders = await loadOpenMemberOrders(gymId, userId, type);
+
+  if (openOrders.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .select({
+      name: orderItems.name,
+      quantity: sql<string>`SUM(${orderItems.quantity})`,
+    })
+    .from(orderItems)
+    .where(
+      and(
+        eq(orderItems.gymId, gymId),
+        inArray(
+          orderItems.orderId,
+          openOrders.map((row) => row.id)
+        ),
+        isNull(orderItems.voidedAt)
+      )
+    )
+    .groupBy(orderItems.name)
+    .orderBy(desc(sql`SUM(${orderItems.quantity})`))
+    .limit(OWED_ITEM_LIMIT);
+
+  return rows.map((row) => ({
+    name: row.name ?? "",
+    quantity: toNumber(row.quantity),
+  }));
+};
+
+/**
  * Pays down a member's outstanding shop balance. The desk enters one amount for
  * the whole balance; it is applied to their oldest unsettled orders first, and
  * an order that becomes fully covered is stamped `settled_at`. One income row

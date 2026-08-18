@@ -4,33 +4,43 @@ import { cn } from "@repo/design-system/lib/utils";
 import {
   ClockIcon,
   LogInIcon,
+  LogOutIcon,
   ScanFaceIcon,
   ShieldAlertIcon,
+  ShoppingCartIcon,
   UserCheckIcon,
   WifiIcon,
   XIcon,
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
+import { IdCode } from "@/components/id-code";
 import type { AttendanceEventView } from "@/features/devices/types";
 import { formatTime } from "@/lib/date";
+import { formatMoney } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/provider";
 import {
+  type CheckoutNotice,
   type DoorState,
   type DuplicateScan,
   formatEntry,
   reasonMessage,
   type UnknownScan,
 } from "../types";
+import { owedItemsLine } from "./checkout-dialog";
 
 interface PendingQueueProperties {
+  /** The member id whose "Check out anyway" is in flight, so it can wait. */
+  checkoutBusyId: string | null;
   /** The id currently being decided, so its buttons can show the wait. */
   decidingId: number | null;
   /** One poll of the door: the queue, the last scan, the unnameable one. */
   door: DoorState;
   isRemovingUnknown: boolean;
   messages: Messages;
+  onCheckoutAnyway: (memberId: string) => void;
   onDecide: (sessionId: number, isAccepted: boolean) => void;
+  onPayCheckout: (notice: CheckoutNotice) => void;
   onRemoveUnknown: () => void;
 }
 
@@ -140,6 +150,8 @@ interface DoorView {
   name: string;
   nameTone: string;
   tile: string;
+  /** The member's own code, shown as a chip beside the name. Null for staff. */
+  uniqueId: string | null;
 }
 
 const line = (...parts: (string | null | undefined)[]): string =>
@@ -165,15 +177,20 @@ const doorView = (
       name: repeat.name,
       nameTone: "text-amber-700 dark:text-amber-300",
       tile: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+      uniqueId: null,
     };
   }
 
   if (scan) {
+    const isOut = scan.direction === "out";
+
     return {
+      // Past tense, said plainly: "Chiqdi" / "Kirdi" — what just happened at the
+      // door, not the noun for a doorway.
       detail: line(
-        scan.direction === "out"
-          ? messages["devices.directionOutShort"]
-          : messages["devices.directionInShort"],
+        isOut
+          ? messages["attendance.checkedOut"]
+          : messages["attendance.checkedIn"],
         formatTime(scan.time),
         scan.deviceName
       ),
@@ -182,7 +199,10 @@ const doorView = (
       icon: <UserCheckIcon className="size-6" />,
       name: scan.personName ?? "",
       nameTone: "",
-      tile: "bg-primary/15 text-primary-accent",
+      tile: isOut
+        ? "bg-muted text-muted-foreground"
+        : "bg-primary/15 text-primary-accent",
+      uniqueId: scan.uniqueId,
     };
   }
 
@@ -194,6 +214,7 @@ const doorView = (
     name: messages["attendance.waitingScan"],
     nameTone: "",
     tile: "bg-muted text-muted-foreground",
+    uniqueId: null,
   };
 };
 
@@ -246,9 +267,12 @@ const DoorBanner = ({
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className={cn("truncate font-semibold text-lg", view.nameTone)}>
-          {view.name}
-        </p>
+        <div className="flex items-center gap-2">
+          <p className={cn("truncate font-semibold text-lg", view.nameTone)}>
+            {view.name}
+          </p>
+          {view.uniqueId ? <IdCode code={view.uniqueId} /> : null}
+        </div>
         {view.detail ? (
           <p className={cn("truncate text-sm", view.detailTone)}>
             {view.detail}
@@ -313,6 +337,76 @@ const UnknownScanBanner = ({
 );
 
 /**
+ * A member scanned out owing on shop orders. The door left the visit open on
+ * purpose; this is where the desk clears the tab or waves them out with it.
+ *
+ * Amber, not red: this is a decision to make, not something broken. It is order
+ * debt only — the reminder never mentions a membership balance. The notice comes
+ * from the server on a TTL, so it clears itself if the desk never answers, and
+ * the member simply stays in the "inside now" panel to be checked out from there.
+ */
+const CheckoutBanner = ({
+  isBusy,
+  messages,
+  notice,
+  onCheckoutAnyway,
+  onPayCheckout,
+}: {
+  isBusy: boolean;
+  messages: Messages;
+  notice: CheckoutNotice;
+  onCheckoutAnyway: (memberId: string) => void;
+  onPayCheckout: (notice: CheckoutNotice) => void;
+}) => (
+  <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+    <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300">
+      <ShoppingCartIcon className="size-6" />
+    </span>
+
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <p className="truncate font-semibold text-amber-700 text-lg dark:text-amber-300">
+          {notice.name}
+        </p>
+        {notice.uniqueId ? <IdCode code={notice.uniqueId} /> : null}
+      </div>
+      <p className="truncate text-amber-700/90 text-sm dark:text-amber-400">
+        {messages["attendance.owesForOrders"]}:{" "}
+        <span className="font-semibold">{formatMoney(notice.remaining)}</span>
+      </p>
+      {/* What they are leaving with. A figure on its own makes the desk open the
+          orders drawer to answer "for what?" — with somebody standing there. */}
+      {notice.items.length === 0 ? null : (
+        <p className="truncate text-amber-700/80 text-xs dark:text-amber-400/80">
+          {messages["attendance.boughtItems"]}: {owedItemsLine(notice.items)}
+        </p>
+      )}
+    </div>
+
+    <div className="flex shrink-0 items-center gap-2">
+      <Button
+        className="gap-2"
+        disabled={isBusy}
+        onClick={() => onPayCheckout(notice)}
+        size="sm"
+      >
+        {messages["attendance.payAndCheckout"]}
+      </Button>
+      <Button
+        className="gap-2 text-muted-foreground"
+        disabled={isBusy}
+        onClick={() => onCheckoutAnyway(notice.memberId)}
+        size="sm"
+        variant="ghost"
+      >
+        {isBusy ? <Spinner /> : <LogOutIcon className="size-4" />}
+        {messages["attendance.checkoutAnyway"]}
+      </Button>
+    </div>
+  </div>
+);
+
+/**
  * Somebody is standing at the door right now.
  *
  * The newest refusal gets a banner of its own above the queue — it is the thing
@@ -326,15 +420,19 @@ const UnknownScanBanner = ({
  * The unknown scan sits with the queue on this: it too waits for an answer.
  */
 export const PendingQueue = ({
+  checkoutBusyId,
   decidingId,
   door,
   isRemovingUnknown,
   messages,
+  onCheckoutAnyway,
   onDecide,
+  onPayCheckout,
   onRemoveUnknown,
 }: PendingQueueProperties) => {
   const { locale } = useLocale();
-  const { duplicateScan, latestEvent, pending, unknownScan } = door;
+  const { checkoutNotice, duplicateScan, latestEvent, pending, unknownScan } =
+    door;
 
   // Oldest first from the server, so the newest arrival is the last one.
   const latest = pending.at(-1);
@@ -380,10 +478,23 @@ export const PendingQueue = ({
       </div>
     ) : null;
 
-  // Only once the louder two have had their turn — and the row stays either way,
-  // so a banner running out never moves the page under the operator's hand.
+  // A leaving-with-a-tab notice sits with the answerable banners — it is a
+  // decision, not a "just happened" that fades. It has no clock of its own; the
+  // server drops it on a TTL and the poll stops sending it.
+  const checkoutBanner = checkoutNotice ? (
+    <CheckoutBanner
+      isBusy={checkoutBusyId === checkoutNotice.memberId}
+      messages={messages}
+      notice={checkoutNotice}
+      onCheckoutAnyway={onCheckoutAnyway}
+      onPayCheckout={onPayCheckout}
+    />
+  ) : null;
+
+  // Only once the louder banners have had their turn — and the row stays either
+  // way, so a banner running out never moves the page under the operator's hand.
   const doorBanner =
-    unknownBanner || refusalBanner ? null : (
+    unknownBanner || refusalBanner || checkoutBanner ? null : (
       <DoorBanner
         duplicateScan={
           repeatUntil !== null && repeatUntil > now ? duplicateScan : null
@@ -396,13 +507,24 @@ export const PendingQueue = ({
     );
 
   if (pending.length === 0) {
-    return unknownBanner ?? doorBanner;
+    if (unknownBanner || checkoutBanner || doorBanner) {
+      return (
+        <div className="flex flex-col gap-3">
+          {unknownBanner}
+          {checkoutBanner}
+          {doorBanner}
+        </div>
+      );
+    }
+
+    return null;
   }
 
   return (
     <div className="flex flex-col gap-3">
       {unknownBanner}
       {refusalBanner}
+      {checkoutBanner}
       {doorBanner}
 
       <div className="overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/5">

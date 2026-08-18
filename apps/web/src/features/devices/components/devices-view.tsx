@@ -10,6 +10,7 @@ import {
 import { cn } from "@repo/design-system/lib/utils";
 import { PlusIcon, ScanFaceIcon } from "lucide-react";
 import { useState } from "react";
+import { IdCode } from "@/components/id-code";
 import type { MemberListItem } from "@/features/members/types";
 import type { WorkerListItem } from "@/features/workers/types";
 import type { Messages } from "@/lib/i18n/dictionary";
@@ -246,9 +247,14 @@ export const DevicesView = ({
                   <ScanFaceIcon className="size-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">
-                    {event.personName ?? event.personId ?? "—"}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    {/* The name, and the member's own code beside it — never the
+                        raw 20-char id, which is not what the desk calls anyone. */}
+                    <p className="truncate font-medium">
+                      {event.personName ?? event.uniqueId ?? "—"}
+                    </p>
+                    {event.uniqueId ? <IdCode code={event.uniqueId} /> : null}
+                  </div>
                   <p className="truncate text-muted-foreground text-sm">
                     {event.direction === "out"
                       ? messages["devices.directionOutShort"]

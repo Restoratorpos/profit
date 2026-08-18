@@ -874,7 +874,7 @@ export const createMember = async (
   gymId: string,
   input: CreateMemberInput,
   workerId: string | null
-): Promise<MemberListItem> => {
+): Promise<{ id: string }> => {
   const memberId = nanoid(ID_LENGTH);
   const now = new Date();
 
@@ -915,15 +915,16 @@ export const createMember = async (
     }
   });
 
-  const [created] = (await listMembers(gymId)).filter(
-    (member) => member.id === memberId
-  );
-
-  if (!created) {
-    throw new NotFoundError("Member not found");
-  }
-
-  return created;
+  /*
+   * Just the id, not the whole computed member. The one caller — the new-member
+   * sheet — needs only the id, to enrol the face in a follow-up call, and it
+   * refetches the roster on success anyway. Re-running `listMembers` (the full
+   * debt/membership/face aggregate over every member in the gym) here spent
+   * seconds rebuilding a row the client throws away — long enough that the create
+   * overran the client's request timeout and reported a false "timed out" on a
+   * member that was in fact saved.
+   */
+  return { id: memberId };
 };
 
 export const updateMember = async (
@@ -961,41 +962,51 @@ export const updateMember = async (
  * is unreachable, and that failure has to abandon the whole delete: a face left
  * on a box after its owner is gone still opens the door, and the CRM can no
  * longer say for whom.
+ *
+ * `force` is the operator overriding the money guard: "delete anyway". It only
+ * removes the member and what describes them — their memberships and attendance,
+ * exactly as an ordinary delete does. The ledger is left alone: income and
+ * orders keep their rows, so the gym's takings do not change. It is for clearing
+ * out a test account, not for retiring a real one — that is what deactivation is
+ * for.
  */
 export const deleteMember = async (
   gymId: string,
-  memberId: string
+  memberId: string,
+  force = false
 ): Promise<void> => {
   await assertMemberExists(gymId, memberId);
 
-  const [paid] = await db
-    .select({ transactionId: income.transactionId })
-    .from(income)
-    .where(and(eq(income.gymId, gymId), eq(income.memberId, memberId)))
-    .limit(1);
+  if (!force) {
+    const [paid] = await db
+      .select({ transactionId: income.transactionId })
+      .from(income)
+      .where(and(eq(income.gymId, gymId), eq(income.memberId, memberId)))
+      .limit(1);
 
-  if (paid) {
-    throw new ConflictError(
-      "This member has payments on record. Deactivate them instead."
-    );
-  }
+    if (paid) {
+      throw new ConflictError(
+        "This member has payments on record. Deactivate them instead."
+      );
+    }
 
-  const [ordered] = await db
-    .select({ orderId: orders.orderId })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.gymId, gymId),
-        eq(orders.userId, memberId),
-        eq(orders.userType, "member")
+    const [ordered] = await db
+      .select({ orderId: orders.orderId })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.gymId, gymId),
+          eq(orders.userId, memberId),
+          eq(orders.userType, "member")
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (ordered) {
-    throw new ConflictError(
-      "This member has shop orders on record. Deactivate them instead."
-    );
+    if (ordered) {
+      throw new ConflictError(
+        "This member has shop orders on record. Deactivate them instead."
+      );
+    }
   }
 
   await purgeFaceEverywhere(gymId, memberId);

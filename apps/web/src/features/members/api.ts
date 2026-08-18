@@ -8,7 +8,6 @@ import {
 import { apiDelete, apiFetch, apiPatch, apiPost } from "@/lib/api/client";
 import type {
   MemberGender,
-  MemberListItem,
   MemberPage,
   MemberQuery,
   MemberVisit,
@@ -94,16 +93,18 @@ const useInvalidateMembers = () => {
 };
 
 /**
- * Hands the created member back, not just ok/error: the face is enrolled in a
- * second call that needs the new id, and re-fetching the list to find them by
- * name would race with the invalidation.
+ * Hands back the new member's id, not just ok/error: the face is enrolled in a
+ * second call that needs it, and re-fetching the list to find them by name would
+ * race with the invalidation. Only the id — the create no longer rebuilds the
+ * whole computed row the sheet would throw away, which was slow enough to trip
+ * the request timeout on a member that had actually saved.
  */
 export const useCreateMember = () => {
   const invalidate = useInvalidateMembers();
 
   return useMutation({
     mutationFn: (input: MemberInput) =>
-      apiPost<MemberListItem>("/members", input),
+      apiPost<{ id: string }>("/members", input),
     onSuccess: invalidate,
   });
 };
@@ -176,7 +177,8 @@ export const useDeleteMember = () => {
   const invalidate = useInvalidateMembers();
 
   return useMutation({
-    mutationFn: (memberId: string) => apiDelete(`/members/${memberId}`),
+    mutationFn: ({ force, memberId }: { force?: boolean; memberId: string }) =>
+      apiDelete(`/members/${memberId}${force ? "?force=true" : ""}`),
     onSuccess: invalidate,
   });
 };

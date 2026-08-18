@@ -42,9 +42,12 @@ vi.mock("../src/db/index.js", () => {
   return { db: chain };
 });
 
-const { evaluateMemberAccess } = await import(
-  "../src/services/attendance.service.js"
-);
+const {
+  evaluateMemberAccess,
+  isDoorRepeat,
+  memberArrivalOf,
+  memberScanIsDeparture,
+} = await import("../src/services/attendance.service.js");
 
 const GYM = "gym_00000000000000001";
 const MEMBER = "mem_0000000000000001";
@@ -238,5 +241,88 @@ describe("evaluateMemberAccess", () => {
     expect((await evaluateMemberAccess(GYM, MEMBER, at(18))).reason).toBe(
       "outside_hours"
     );
+  });
+});
+
+describe("memberScanIsDeparture", () => {
+  it("is never a departure when no visit is open today", () => {
+    // Nothing to leave, whatever kind of reader saw them.
+    expect(memberScanIsDeparture("out", false)).toBe(false);
+    expect(memberScanIsDeparture("in", false)).toBe(false);
+    expect(memberScanIsDeparture(null, false)).toBe(false);
+  });
+
+  it("toggles a member out at a 'both' door once a visit is open", () => {
+    // The single-door case: first scan opened the visit, this one closes it. A
+    // "both" door reaches here as a null side — it has no in/out of its own.
+    expect(memberScanIsDeparture(null, true)).toBe(true);
+  });
+
+  it("leaves on a dedicated exit reader", () => {
+    expect(memberScanIsDeparture("out", true)).toBe(true);
+  });
+
+  it("treats a dedicated entry reader as an arrival even mid-visit", () => {
+    // A two-door gym: the entry reader is never a way out, so a re-scan there is
+    // "already inside", not a checkout nobody asked for.
+    expect(memberScanIsDeparture("in", true)).toBe(false);
+  });
+});
+
+describe("memberArrivalOf", () => {
+  it("admits somebody who has not been in today", () => {
+    expect(memberArrivalOf(null)).toBe("admit");
+  });
+
+  it("lets a member who checked out come back in", () => {
+    // The bug: a closed session today read as "already counted", so a member who
+    // stepped out to their car was refused at the door while the "inside now"
+    // panel agreed they had left. Coming back is an arrival.
+    expect(memberArrivalOf("closed")).toBe("readmit");
+  });
+
+  it("says 'inside' for a visit that is still open", () => {
+    expect(memberArrivalOf("open")).toBe("inside");
+  });
+
+  it("keeps one row in the queue while a refusal waits to be answered", () => {
+    expect(memberArrivalOf("pending")).toBe("pending");
+  });
+
+  it("writes nothing for a status it does not recognise", () => {
+    // Safe by default: refusing to write cannot open a second visit for a member
+    // who already has one.
+    expect(memberArrivalOf("")).toBe("inside");
+    expect(memberArrivalOf("something_new")).toBe("inside");
+  });
+});
+
+describe("isDoorRepeat", () => {
+  const scanned = new Date("2026-08-16T12:07:00");
+  const seconds = (count: number) => new Date(scanned.getTime() + count * 1000);
+
+  it("is not a repeat when the person has never scanned", () => {
+    expect(isDoorRepeat(null, scanned)).toBe(false);
+  });
+
+  it("drops a second read while they pull the door open", () => {
+    // One face, read twice in three seconds: one arrival, not an arrival and a
+    // departure.
+    expect(isDoorRepeat(scanned, seconds(3))).toBe(true);
+  });
+
+  it("lets the scan on the way back out through", () => {
+    // The bug this window used to cause: at a single "both" door the second
+    // scan is the check-out, and a minute-long guard swallowed it — the desk
+    // read "already scanned, no visit added" and the member stayed inside.
+    expect(isDoorRepeat(scanned, seconds(30))).toBe(false);
+    expect(isDoorRepeat(scanned, seconds(3600))).toBe(false);
+  });
+
+  it("drops history a sync is re-reading, however old", () => {
+    // Re-ingesting the terminal's buffer: the same event to the second, and the
+    // older half of an in-then-out pair. Neither is somebody at the door.
+    expect(isDoorRepeat(scanned, scanned)).toBe(true);
+    expect(isDoorRepeat(scanned, seconds(-3600))).toBe(true);
   });
 });
