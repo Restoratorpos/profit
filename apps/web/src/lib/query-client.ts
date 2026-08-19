@@ -40,6 +40,40 @@ export const queryClient = new QueryClient({
 const PERSIST_KEY = "profit-query-cache";
 
 /**
+ * **Bump this whenever a persisted wire shape changes.**
+ *
+ * The persisted cache is restored and painted *before* anything refetches, so
+ * a reload after a deploy hands last week's JSON to this week's components. A
+ * field that merely moved is a wrong number on screen for a moment; a field
+ * that is now read one level deeper is a white screen, which is what adding
+ * `activity` to the revenue report did — every dashboard whose cache predated
+ * it crashed on `report.activity.visits` with the API answering perfectly.
+ *
+ * Buster changes discard the stored cache instead of adopting it, so the cost
+ * of bumping is one skeleton on the next load. That is always the cheaper side
+ * of this trade.
+ *
+ * | v | what changed |
+ * | --- | --- |
+ * | 1 | the original persisted cache |
+ * | 2 | dashboard: attention counts, and `activity` on the revenue report |
+ */
+export const CACHE_SCHEMA_VERSION = "2";
+
+/**
+ * Whether a stored cache may be restored, as one string.
+ *
+ * Two independent things make a cache the wrong one to adopt, and both have to
+ * be in here or the wrong half silently stops mattering: **who** it belongs to
+ * (a shared front desk must not restore the last operator's data) and **what
+ * shape** it is in (see `CACHE_SCHEMA_VERSION`). It is a function so both rules
+ * stay in one testable place rather than as a template literal at the call site
+ * that reads like something safe to tidy up.
+ */
+export const cacheBuster = (userId: string | null | undefined): string =>
+  `${CACHE_SCHEMA_VERSION}:${userId ?? "anonymous"}`;
+
+/**
  * Persists the cache so a reload paints immediately instead of flashing
  * skeletons — the closest thing a SPA has to the server-rendered first paint
  * this app is giving up.

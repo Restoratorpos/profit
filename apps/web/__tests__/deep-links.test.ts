@@ -5,6 +5,11 @@ import {
   memberQueryFrom,
 } from "@/features/members/types";
 import { DEFAULT_ORDER_SEED, orderSeedFrom } from "@/features/orders/types";
+import {
+  DEFAULT_LEDGER_FILTER,
+  isSeeded,
+  ledgerFilterFrom,
+} from "@/features/transactions/types";
 import { searchText } from "@/lib/search-text";
 
 /**
@@ -50,9 +55,45 @@ describe("a screen opened without search params", () => {
     expect(stockSeedFrom({})).toEqual(DEFAULT_STOCK_SEED);
     expect(orderSeedFrom({})).toEqual(DEFAULT_ORDER_SEED);
   });
+
+  /** A bare `/transactions` is the whole ledger, both directions, every till. */
+  it("gives the ledger every row when the URL asks for nothing", () => {
+    expect(ledgerFilterFrom({})).toEqual(DEFAULT_LEDGER_FILTER);
+  });
+
+  /**
+   * And offers no way back, because there is nowhere to go back *to* — the
+   * ledger is a sidebar destination in its own right. A permanent back arrow on
+   * a top-level screen is a lie about how the operator got there.
+   */
+  it("offers no way back when nobody linked here", () => {
+    expect(isSeeded(ledgerFilterFrom({}))).toBe(false);
+  });
 });
 
 describe("a screen opened from the dashboard", () => {
+  /**
+   * The money tiles link here, and each opens only its own half. The filter is
+   * `null` for "everything" while the URL simply omits the key, so the helper
+   * is what translates between the two spellings.
+   */
+  /** Opened from a tile, so the screen carries the way back to it. */
+  it("offers a way back when a link opened the ledger", () => {
+    expect(isSeeded(ledgerFilterFrom({ kind: "income" }))).toBe(true);
+    expect(isSeeded(ledgerFilterFrom({ cashbox: "cash" }))).toBe(true);
+  });
+
+  it("narrows the ledger to the direction the tile was showing", () => {
+    expect(ledgerFilterFrom({ kind: "income" })).toEqual({
+      cashbox: null,
+      kind: "income",
+    });
+    expect(ledgerFilterFrom({ kind: "expense" })).toEqual({
+      cashbox: null,
+      kind: "expense",
+    });
+  });
+
   it("narrows the roster to the card that linked to it", () => {
     const query = memberQueryFrom({ filter: "expiring", q: "998901234567" });
 

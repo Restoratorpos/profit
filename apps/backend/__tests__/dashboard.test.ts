@@ -80,10 +80,15 @@ describe("GET /dashboard/revenue", () => {
     expect(service.getRevenueReport).toHaveBeenCalledWith(GYM, { days: 7 });
   });
 
+  /**
+   * Today, matching the range both clients open on. The bound is what has to
+   * hold server-side; the default is only what a caller naming no window gets,
+   * and "all of history" is the one answer that must never be it.
+   */
   it("defaults the window rather than reading all of history", async () => {
     await request("/dashboard/revenue");
 
-    expect(service.getRevenueReport).toHaveBeenCalledWith(GYM, { days: 30 });
+    expect(service.getRevenueReport).toHaveBeenCalledWith(GYM, { days: 1 });
   });
 
   it("refuses a window wider than a year", async () => {

@@ -1,3 +1,6 @@
+import { Button } from "@repo/design-system/components/ui/button";
+import { Link } from "@tanstack/react-router";
+import { ArrowLeftIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { Messages } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/provider";
@@ -29,6 +32,15 @@ interface TransactionsViewProperties {
   /** The ledger under the current filter. Owned by the page's query. */
   page: TransactionPage;
   parties: TransactionParties;
+  /**
+   * Whether this screen was opened from somewhere else — a URL carrying an
+   * opening filter — rather than reached from the sidebar.
+   *
+   * It reads the *seed*, not the live filter, so toggling "kirim" by hand here
+   * does not grow a back arrow to a screen nobody came from. A top-level
+   * destination with a permanent back button is a lie about how you got there.
+   */
+  showBack: boolean;
 }
 
 /**
@@ -45,6 +57,7 @@ export const TransactionsView = ({
   onFilterChange,
   page,
   parties,
+  showBack,
 }: TransactionsViewProperties) => {
   const { locale } = useLocale();
   const [tab, setTab] = useState<TxTab>("expense");
@@ -175,7 +188,22 @@ export const TransactionsView = ({
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 sm:p-6">
-      <h1 className="sr-only">{messages["nav.transactions"]}</h1>
+      {/* Exactly one `h1` either way: a visible one when there is a way back to
+          show beside it, the screen-reader-only one otherwise. */}
+      {showBack ? (
+        <div className="flex items-center gap-3">
+          <Button asChild size="icon" variant="ghost">
+            <Link aria-label={messages["nav.dashboard"]} to="/">
+              <ArrowLeftIcon className="size-5" />
+            </Link>
+          </Button>
+          <h1 className="font-semibold text-2xl tracking-tight">
+            {messages["nav.transactions"]}
+          </h1>
+        </div>
+      ) : (
+        <h1 className="sr-only">{messages["nav.transactions"]}</h1>
+      )}
 
       <CashboxTiles
         balances={page.balances}

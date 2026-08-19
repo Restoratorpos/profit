@@ -1,9 +1,12 @@
 import { Spinner } from "@repo/design-system/components/ui/spinner";
+import { getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { useLocale } from "@/lib/i18n/provider";
 import { useLedger, useParties } from "../api";
-import { DEFAULT_LEDGER_FILTER, type LedgerFilter } from "../types";
+import { isSeeded, type LedgerFilter, ledgerFilterFrom } from "../types";
 import { TransactionsView } from "./transactions-view";
+
+const route = getRouteApi("/_authed/transactions");
 
 /**
  * What `app/(authenticated)/transactions/page.tsx` was.
@@ -12,9 +15,9 @@ import { TransactionsView } from "./transactions-view";
  * the ledger is a page from the server, not a local slice, so the thing that
  * decides which page is fetched has to sit above the thing that fetches it.
  */
-export const TransactionsPage = () => {
+const Ledger = ({ seed }: { seed: LedgerFilter }) => {
   const { messages } = useLocale();
-  const [filter, setFilter] = useState<LedgerFilter>(DEFAULT_LEDGER_FILTER);
+  const [filter, setFilter] = useState<LedgerFilter>(seed);
 
   const ledger = useLedger(filter);
   const parties = useParties();
@@ -52,6 +55,23 @@ export const TransactionsPage = () => {
       onFilterChange={setFilter}
       page={ledger.data}
       parties={parties.data}
+      showBack={isSeeded(seed)}
     />
   );
+};
+
+export const TransactionsPage = () => {
+  const seed = ledgerFilterFrom(route.useSearch());
+
+  /*
+   * Keyed by the seed, and split from the component above for the same reason
+   * `/members` is: the filter is `useState`, and `useState` ignores a changed
+   * initial value. Navigating within one route does not remount, so without
+   * this the dashboard's "chiqim" link would leave the address bar saying
+   * `kind=expense` while the list still showed whatever was on screen — or
+   * keep a filter after the sidebar's plain "Tranzaksiyalar" link had cleared
+   * it. Remounting also closes an open entry sheet, which is the right answer
+   * for a deliberate navigation.
+   */
+  return <Ledger key={`${seed.kind}:${seed.cashbox}`} seed={seed} />;
 };

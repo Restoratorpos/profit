@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "main": "expo-router/entry",
   "scripts": {
+    "dev": "expo start",
+    "build": "tsc --noEmit && expo export",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "test": "echo \"no tests yet\" && exit 0",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"no tests yet\" && exit 0"
+    "clean": "git clean -xdf .expo .turbo dist node_modules"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

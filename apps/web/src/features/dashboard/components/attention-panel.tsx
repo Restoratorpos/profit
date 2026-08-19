@@ -59,6 +59,11 @@ interface AttentionCardProperties {
   count: number;
   emptyText: string;
   icon: LucideIcon;
+  /**
+   * A figure describing the whole pile rather than the rows shown — what the
+   * debts come to, say. The list is who; this is how much.
+   */
+  note?: string;
   title: string;
   /**
    * The "see all" control, built by the caller rather than from a `to` prop:
@@ -75,6 +80,7 @@ const AttentionCard = ({
   count,
   emptyText,
   icon: Icon,
+  note,
   title,
   viewAll,
 }: AttentionCardProperties) => (
@@ -90,6 +96,11 @@ const AttentionCard = ({
           <Badge className="tabular-nums" variant="secondary">
             {count}
           </Badge>
+        ) : null}
+        {count > 0 && note ? (
+          <span className="truncate text-caption text-muted-foreground tabular-nums">
+            {note}
+          </span>
         ) : null}
       </div>
 
@@ -159,21 +170,36 @@ const STOCK_BADGE: Record<
 };
 
 interface AttentionPanelProperties {
+  /**
+   * The true totals, not `rows.length` — the backend caps each list at six, so
+   * counting the rows badges every busy day as "6". A card still shows the six
+   * it was given; the badge is what says how deep the pile goes, and the "see
+   * all" link is what gets to the rest.
+   */
+  debtorCount: number;
+  /** What the debts come to across everybody, already formatted. */
+  debtorNote: string;
   debtors: DebtorRow[];
   expiring: ExpiringMembership[];
+  expiringCount: number;
   lowStock: LowStockRow[];
+  lowStockCount: number;
   messages: Messages;
 }
 
 export const AttentionPanel = ({
+  debtorCount,
+  debtorNote,
   debtors,
   expiring,
+  expiringCount,
   lowStock,
+  lowStockCount,
   messages,
 }: AttentionPanelProperties) => (
   <div className="grid min-w-0 gap-4 xl:grid-cols-3">
     <AttentionCard
-      count={expiring.length}
+      count={expiringCount}
       emptyText={messages["dash.expiringEmpty"]}
       icon={CalendarClockIcon}
       title={messages["dash.expiring"]}
@@ -239,7 +265,7 @@ export const AttentionPanel = ({
     </AttentionCard>
 
     <AttentionCard
-      count={lowStock.length}
+      count={lowStockCount}
       emptyText={messages["dash.lowStockEmpty"]}
       icon={PackageXIcon}
       title={messages["dash.lowStock"]}
@@ -301,9 +327,10 @@ export const AttentionPanel = ({
     </AttentionCard>
 
     <AttentionCard
-      count={debtors.length}
+      count={debtorCount}
       emptyText={messages["dash.debtorsEmpty"]}
       icon={WalletMinimalIcon}
+      note={debtorNote}
       title={messages["dash.debtors"]}
       viewAll={
         <Button asChild size="sm" variant="ghost">

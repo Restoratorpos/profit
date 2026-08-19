@@ -1,6 +1,6 @@
 # GYM
 
-Turborepo monorepo (pnpm workspaces), originally scaffolded from **next-forge**. Two deployable apps and a set of shared `@repo/*` packages.
+Turborepo monorepo (pnpm workspaces), originally scaffolded from **next-forge**. Four app workspaces and a set of shared `@repo/*` packages.
 
 ## Layout
 
@@ -9,6 +9,7 @@ apps/
   web/       React 19 + Vite SPA (TanStack Router/Query) → localhost:3001
   backend/   Hono API on Node (tsx/tsc, ESM)             → localhost:7090
   mobile/    Expo (React Native) manager app, iOS/Android via EAS
+  desktop/   Electron wrapper shipping the desk terminal for Windows
 packages/
   auth/               phone input + normalization. The next-auth half is dead —
                       see "Auth" below.
@@ -31,11 +32,17 @@ Run from the repo root; `--filter` targets one workspace.
 | Task | Command |
 |---|---|
 | Dev (all) | `pnpm dev` |
-| Dev (one) | `pnpm --filter web dev` / `pnpm --filter backend dev` |
+| Dev (one) | `pnpm --filter <pkg> dev` — `web`, `backend`, `mobile`, `desktop` |
+| Build (all) | `pnpm build` — turbo runs each workspace's `test` first |
 | Typecheck | `pnpm --filter <pkg> typecheck` |
 | Test | `pnpm --filter <pkg> test` (vitest) |
 | Lint / format | `pnpm check` / `pnpm fix` (ultracite → biome) |
 | Backend schema push | `pnpm --filter backend db:push` |
+
+**Every app is a turbo task now**, `mobile` included: it spells Expo's `start` as
+`dev` and `expo export` as `build`, so `pnpm dev` also raises Metro and
+`pnpm build` also proves the phone app still bundles. `expo export` writes
+`dist/`, which `turbo.json` already caches. See `apps/mobile/README.md`.
 
 ## Architecture
 

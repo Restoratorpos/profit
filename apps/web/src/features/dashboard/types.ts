@@ -66,10 +66,19 @@ export interface DebtorRow {
 }
 
 export interface DashboardSnapshot {
+  /**
+   * Each list is capped at six rows by the backend, so its `.length` is a page
+   * size rather than an answer. The counts are the real totals and are what
+   * the cards badge — six expiring memberships and forty look identical
+   * otherwise, and only one of them is somebody's afternoon.
+   */
   attention: {
+    debtorCount: number;
     debtors: DebtorRow[];
     expiring: ExpiringMembership[];
+    expiringCount: number;
     lowStock: LowStockRow[];
+    lowStockCount: number;
   };
   cashboxes: CashboxBalances;
   members: MemberStanding;
@@ -132,22 +141,42 @@ export interface TopProduct {
   revenue: string;
 }
 
+/** How busy the window was, as opposed to what it was worth. */
+export interface ActivityCounts {
+  orders: number;
+  visits: number;
+}
+
 export interface RevenueReport {
+  activity: ActivityCounts;
   days: number;
   points: RevenuePoint[];
   previous: RevenueTotals;
+  previousActivity: ActivityCounts;
   topProducts: TopProduct[];
   totals: RevenueTotals;
 }
 
-/** The windows the range row offers. Mirrors `REVENUE_RANGES` on the backend. */
-export const REVENUE_RANGES = [7, 30, 90] as const;
+/**
+ * The windows the range control offers, `1` being today. Mirrors
+ * `REVENUE_RANGES` on the backend, and now `apps/mobile` too — the phone has
+ * offered these four since it shipped.
+ *
+ * **This range governs the whole money half of the screen**, not just the
+ * chart: the tile row, the trend and the best-sellers list all read it. What it
+ * cannot govern is the attention band — a debt is a balance now, a shelf is
+ * empty now, and a membership runs out in the future. "Shelves running low over
+ * the last 30 days" is not a question anybody asks.
+ */
+export const REVENUE_RANGES = [1, 7, 30, 90] as const;
 
 export type RevenueRange = (typeof REVENUE_RANGES)[number];
 
-export const DEFAULT_REVENUE_RANGE: RevenueRange = 30;
+/** Today, because that is the figure the desk opens the screen for. */
+export const DEFAULT_REVENUE_RANGE: RevenueRange = 1;
 
 export const RANGE_LABEL: Record<RevenueRange, MessageKey> = {
+  1: "dash.rangeToday",
   7: "dash.range7",
   30: "dash.range30",
   90: "dash.range90",
@@ -190,8 +219,8 @@ export const formatCompact = (value: number): string =>
  * and rendering it as +100% (or ∞) is a number the desk would act on.
  */
 export const changeFrom = (
-  current: string,
-  previous: string
+  current: number | string,
+  previous: number | string
 ): number | null => {
   const before = Number(previous);
   const now = Number(current);

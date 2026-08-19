@@ -30,10 +30,18 @@ starting position, not a permanent one — see "Where writes go" below.
 ## Running it
 
 ```bash
-pnpm --filter mobile start          # Metro; press a / i, or scan with Expo Go
+pnpm --filter mobile dev            # Metro; press a / i, or scan with Expo Go
 pnpm --filter mobile typecheck
+pnpm --filter mobile build          # tsc + `expo export` — the bundle check
 pnpm --filter backend dev           # the API this talks to, on :7090
 ```
+
+`dev` is an alias for `start` — Expo's own name for it — so this workspace joins
+the root `pnpm dev`, `pnpm build` and `pnpm test` alongside `web` and `backend`.
+`build` is `expo export`, which bundles both native platforms into `dist/` and so
+proves the app still bundles; it is not an EAS build and produces no binary.
+`app.json` pins `platforms` to `["ios", "android"]` — without it `expo export`
+defaults to including web and stops on a missing `react-native-web`.
 
 **Point it at the backend first.** The app needs an absolute host — a phone's
 `localhost` is the phone.

@@ -23,11 +23,8 @@ import {
   formatAmount,
   formatDayFull,
   pointTotal,
-  RANGE_LABEL,
-  REVENUE_RANGES,
   REVENUE_SOURCES,
   type RevenuePoint,
-  type RevenueRange,
   SOURCE_COLOR,
   SOURCE_LABEL,
 } from "../types";
@@ -43,12 +40,18 @@ import { RevenueChart } from "./revenue-chart";
  * than something behind a menu.
  */
 
+/**
+ * Neither the period nor its totals live here any more.
+ *
+ * The range control moved to the page header, where it visibly governs the tile
+ * row and the best sellers as well as this chart — and once the tiles carry the
+ * window's revenue, spending and net, restating them above the columns was the
+ * same three figures twice on one card.
+ */
 interface RevenuePanelProperties {
   isStale: boolean;
   messages: Messages;
-  onRangeChange: (next: RevenueRange) => void;
   points: RevenuePoint[];
-  range: RevenueRange;
 }
 
 type Mode = "chart" | "table";
@@ -74,9 +77,7 @@ const Legend = ({ messages }: { messages: Messages }) => (
 export const RevenuePanel = ({
   isStale,
   messages,
-  onRangeChange,
   points,
-  range,
 }: RevenuePanelProperties) => {
   const [mode, setMode] = useState<Mode>("chart");
 
@@ -95,24 +96,6 @@ export const RevenuePanel = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* One filter row, scoping everything in this section — the tiles
-              above the chart read the same window. */}
-          <div className="flex items-center gap-1">
-            {REVENUE_RANGES.map((days) => (
-              <Button
-                aria-pressed={days === range}
-                className={cn(days === range && SELECTED_TINT)}
-                key={days}
-                onClick={() => onRangeChange(days)}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {messages[RANGE_LABEL[days]]}
-              </Button>
-            ))}
-          </div>
-
           <div className="flex items-center gap-1">
             <Button
               aria-label={messages["dash.viewChart"]}

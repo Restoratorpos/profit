@@ -10,17 +10,22 @@ import { z } from "zod";
  */
 
 /**
- * The windows the range control offers.
+ * The windows the range control offers. `1` is today.
  *
- * Three rather than a free date picker: the question the desk asks is "how is
- * the week going", not "what happened between the 3rd and the 11th". A custom
- * range belongs on a report, and there is no report screen yet.
+ * Four presets rather than a free date picker: the question the desk asks is
+ * "how is the week going", not "what happened between the 3rd and the 11th". A
+ * custom range belongs on a report, and there is no report screen yet.
+ *
+ * The default is today, because that is the figure the desk opens the screen
+ * for. It matches what `apps/mobile` has always sent — the phone has used
+ * `[1, 7, 30, 90]` defaulting to `1` since it shipped, and the web was the odd
+ * one out.
  */
-export const REVENUE_RANGES = [7, 30, 90] as const;
+export const REVENUE_RANGES = [1, 7, 30, 90] as const;
 
 export type RevenueRange = (typeof REVENUE_RANGES)[number];
 
-export const DEFAULT_REVENUE_RANGE: RevenueRange = 30;
+export const DEFAULT_REVENUE_RANGE: RevenueRange = 1;
 
 /**
  * `days` is validated as a bounded number rather than an enum of the three

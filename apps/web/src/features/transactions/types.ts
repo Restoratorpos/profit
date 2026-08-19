@@ -172,6 +172,48 @@ export const LEDGER_KINDS = [
   labelKey: MessageKey;
 }[];
 
+/**
+ * The two directions a link may open the ledger on.
+ *
+ * `null` — everything — is deliberately not one of them: a bare
+ * `/transactions` already means that, and `?kind=` carrying an empty value is a
+ * second spelling of the same screen.
+ */
+export const LEDGER_KIND_VALUES = ["income", "expense"] as const;
+
+/** What the URL may carry. Both optional; neither is required to open. */
+export interface LedgerSearch {
+  cashbox?: Cashbox;
+  kind?: (typeof LEDGER_KIND_VALUES)[number];
+}
+
+/**
+ * The URL's opening values, as the filter the ledger actually fetches.
+ *
+ * One helper, so the route loader and the page derive the same value — two
+ * readings of the same search would warm one query and then mount another,
+ * fetching the screen twice to show it once.
+ */
+export const ledgerFilterFrom = (search: LedgerSearch): LedgerFilter => ({
+  cashbox: search.cashbox ?? null,
+  kind: search.kind ?? null,
+});
+
+/**
+ * Whether the ledger was opened *from* somewhere — a URL carrying an opening
+ * filter — rather than reached from the sidebar. It decides whether the screen
+ * offers a way back.
+ *
+ * **Give this the seed, never the live filter.** They are the same type, so
+ * nothing but this sentence stops the two being swapped: the arrow means "you
+ * came here from somewhere", which is a fact about the URL that opened the
+ * screen and not about the toggle the operator has pressed since. Fed the live
+ * filter, picking "kirim" by hand would grow a back arrow to a screen nobody
+ * came from.
+ */
+export const isSeeded = (seed: LedgerFilter): boolean =>
+  seed.kind !== null || seed.cashbox !== null;
+
 export interface PartyOption {
   id: string;
   name: string;

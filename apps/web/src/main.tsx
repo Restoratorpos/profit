@@ -9,7 +9,7 @@ import { createRoot } from "react-dom/client";
 import { BootScreen, OfflineScreen } from "@/components/boot-screen";
 import { AuthProvider, useAuth } from "@/lib/auth/context";
 import { LocaleProvider } from "@/lib/i18n/provider";
-import { persister, queryClient } from "@/lib/query-client";
+import { cacheBuster, persister, queryClient } from "@/lib/query-client";
 import { router } from "@/router";
 
 /**
@@ -46,12 +46,19 @@ const RoutedApp = () => {
       persistOptions={{
         persister,
         /*
-         * Scoped to whoever the cache belongs to. A front desk is a shared
-         * machine: restoring the previous operator's cached members for the
-         * next one would be a data leak, so a different id discards the
-         * persisted cache rather than adopting it.
+         * Two things can make a stored cache the wrong one to restore, and both
+         * belong here.
+         *
+         * **Who it belongs to.** A front desk is a shared machine: restoring
+         * the previous operator's cached members for the next one would be a
+         * data leak, so a different id discards the cache rather than adopting
+         * it.
+         *
+         * **What shape it is in.** The cache is painted before anything
+         * refetches, so without a version a reload after a deploy feeds last
+         * week's JSON to this week's components — see `CACHE_SCHEMA_VERSION`.
          */
-        buster: auth.user?.id ?? "anonymous",
+        buster: cacheBuster(auth.user?.id),
         maxAge: 24 * 60 * 60 * 1000,
       }}
     >

@@ -27,6 +27,12 @@ const inTwoDays = new Date(Date.now() + 2 * 86_400_000).toISOString();
 
 const snapshot = (): DashboardSnapshot => ({
   attention: {
+    /*
+     * Deliberately far larger than the rows beside them: the backend caps each
+     * list at six and these are the real totals, which is the whole point of
+     * carrying them separately.
+     */
+    debtorCount: 17,
     debtors: [
       {
         id: "mem_2",
@@ -47,6 +53,7 @@ const snapshot = (): DashboardSnapshot => ({
         state: "expiring",
       },
     ],
+    expiringCount: 19,
     lowStock: [
       {
         id: "prd_1",
@@ -56,6 +63,7 @@ const snapshot = (): DashboardSnapshot => ({
         unit: "dona",
       },
     ],
+    lowStockCount: 23,
   },
   cashboxes: { card: "260000.00", cash: "480000.00", transfer: "130000.00" },
   members: {
@@ -105,6 +113,13 @@ const DAYS = [
 ];
 
 const report = (days: number, quiet: boolean): RevenueReport => ({
+  /*
+   * Visits and shop sales now follow the range like the money does, so the tile
+   * row shows one period rather than two. Distinct from every other figure on
+   * the screen, and from each other's previous window, so a `getByText` lands
+   * on the behaviour under test rather than on an ambiguity.
+   */
+  activity: { orders: 29, visits: 61 },
   days,
   // A quiet window is not an absent one: the days are still there, they are just
   // all zero, which is what the chart's empty state has to recognise.
@@ -119,6 +134,7 @@ const report = (days: number, quiet: boolean): RevenueReport => ({
     revenue: "600000.00",
     shop: "180000.00",
   },
+  previousActivity: { orders: 25, visits: 44 },
   topProducts: [
     {
       id: "prd_9",
@@ -137,9 +153,12 @@ const report = (days: number, quiet: boolean): RevenueReport => ({
   },
 });
 
+/** The digits inside some text, so a figure is found whatever groups it. */
+const onlyDigits = (text: string) => text.replace(/\D/g, "");
+
 /** Matches a rendered figure by its digits, whatever groups them. */
 const digits = (expected: string) => (content: string) =>
-  content.replace(/\D/g, "") === expected;
+  onlyDigits(content) === expected;
 
 let calls: string[] = [];
 let quietWindow = false;
@@ -195,9 +214,15 @@ const renderDashboard = () => {
   );
 };
 
-/** Both queries have to land before anything is drawn — the page waits for both. */
+/**
+ * Both queries have to land before anything is drawn — the page waits for both.
+ *
+ * Waits on the *window's* revenue rather than the snapshot's "today", because
+ * the range at the top of the page now governs the tile row: `snapshot.today`
+ * is no longer rendered anywhere.
+ */
 const waitForLoad = () =>
-  waitFor(() => expect(screen.getByText(digits("1250000"))).toBeDefined());
+  waitFor(() => expect(screen.getByText(digits("900000"))).toBeDefined());
 
 beforeEach(() => {
   calls = [];
@@ -232,13 +257,20 @@ afterEach(() => {
 });
 
 describe("dashboard", () => {
-  it("leads with what the desk has taken since midnight", async () => {
+  /**
+   * One period across the whole row. The range opens on today, so this is still
+   * "what has the desk taken since midnight" by default — the difference is
+   * that spending, visits and shop sales now answer for the same window instead
+   * of three of them being stuck on today under a thirty-day chart.
+   */
+  it("reads every tile off the window the range chose", async () => {
     renderDashboard();
 
     await waitForLoad();
 
-    expect(screen.getByText(digits("310000"))).toBeDefined();
-    expect(screen.getByText(digits("42"))).toBeDefined();
+    expect(screen.getByText(digits("300000"))).toBeDefined();
+    expect(screen.getByText(digits("61"))).toBeDefined();
+    expect(screen.getByText(digits("29"))).toBeDefined();
   });
 
   /**
@@ -266,6 +298,29 @@ describe("dashboard", () => {
    * Why there are two endpoints rather than one. The window is the revenue
    * query's key, so pressing 7 refetches the trend — and must not re-read the
    * roster, the shelves and the tills, none of which have a date range.
+   */
+  /**
+   * The range opens on today, which is the figure the desk opens the screen
+   * for. `apps/mobile` has sent `days=1` by default since it shipped — the web
+   * defaulting to a month was the odd one out, and the reason its tiles and its
+   * chart disagreed about which period they were describing.
+   */
+  it("opens on today", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    expect(
+      calls.some((call) => call.includes("/dashboard/revenue?days=1"))
+    ).toBe(true);
+  });
+
+  /**
+   * The other half of "one range": it governs the money, and it must not reach
+   * the attention band. A debt is a balance now and a shelf is empty now, so
+   * the snapshot is fetched once and never again for a range change — if this
+   * ever pulls `/api/dashboard` a second time, the lists below have quietly
+   * been given a period they cannot have.
    */
   it("refetches only the trend when the window changes", async () => {
     const user = userEvent.setup();
@@ -319,6 +374,24 @@ describe("dashboard", () => {
     );
   });
 
+  /**
+   * The backend caps every attention list at six rows, so a badge counting the
+   * rows it was handed reads "6" on the day forty memberships lapse — and six
+   * and forty are the same afternoon only in one of those two worlds. The badge
+   * carries the true total; the rows stay the head of the list, and "see all"
+   * reaches the rest.
+   */
+  it("badges how deep each pile is, not how many rows fit", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    // One row each in the fixture, against totals of 19 / 23 / 17.
+    expect(screen.getByText("19")).toBeDefined();
+    expect(screen.getByText("23")).toBeDefined();
+    expect(screen.getByText("17")).toBeDefined();
+  });
+
   it("lists who to chase, what to reorder, and whose tab is open", async () => {
     renderDashboard();
 
@@ -328,6 +401,36 @@ describe("dashboard", () => {
     expect(screen.getByText("Suv 0.5")).toBeDefined();
     expect(screen.getByText("Sardor Yusupov")).toBeDefined();
     expect(screen.getByText(digits("75000"))).toBeDefined();
+  });
+
+  /**
+   * A figure on a dashboard is the start of a question, not the end of one:
+   * today's spending is really "what did we spend it on". The answer is the
+   * ledger, narrowed to the half the tile was showing — landing on the
+   * unfiltered list makes the operator re-find what they just clicked.
+   */
+  it("opens each money tile on its own half of the ledger", async () => {
+    renderDashboard();
+
+    await waitForLoad();
+
+    const textOf = (href: string) =>
+      screen
+        .getAllByRole("link")
+        .find((link) => link.getAttribute("href") === href)?.textContent ?? "";
+
+    /*
+     * Asserted through the anchor's own text rather than by finding a control
+     * inside it: the figure being *within* the link is the behaviour — the
+     * whole card is the target, not an arrow in the corner of one. A tile that
+     * regressed to a small control would still carry the right href and would
+     * fail here, which is the point.
+     *
+     * `digits` compares the stripped digits exactly, so this also says the tile
+     * holds that one figure and no other.
+     */
+    expect(onlyDigits(textOf("/transactions?kind=income"))).toContain("900000");
+    expect(onlyDigits(textOf("/transactions?kind=expense"))).toContain("300000");
   });
 
   /**

@@ -32,6 +32,21 @@ interface StatTileProperties {
   /** The one figure this dashboard leads with. Exactly one tile may set it. */
   hero?: boolean;
   icon?: LucideIcon;
+  /**
+   * Whether this tile is inside a link.
+   *
+   * The tile does not build the link itself — the caller wraps it, so the
+   * router keeps typing the path and its search object as a pair (the same
+   * reason the attention cards take a `viewAll` node rather than a `to` prop).
+   * What the tile owns is looking clickable: the whole card lifts under the
+   * cursor, because a figure the desk wants to open is a card-sized target, not
+   * an icon-sized one.
+   *
+   * `h-full` matters here — the wrapping anchor becomes the grid item, and
+   * without it the card shrinks to its content and stops lining up with the
+   * tiles beside it.
+   */
+  interactive?: boolean;
   label: string;
   /**
    * Whether a rise is good news. False on spending: the same green arrow on a
@@ -83,11 +98,18 @@ export const StatTile = ({
   deltaLabel,
   hero = false,
   icon: Icon,
+  interactive = false,
   label,
   upIsGood = true,
   value,
 }: StatTileProperties) => (
-  <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4">
+  <div
+    className={cn(
+      "flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4",
+      interactive &&
+        "h-full transition-colors hover:border-ring/60 hover:bg-accent/40"
+    )}
+  >
     <div className="flex min-w-0 items-center gap-3">
       {Icon ? (
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">

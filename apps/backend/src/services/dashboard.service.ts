@@ -163,7 +163,15 @@ export interface TopProduct {
   revenue: string;
 }
 
+/** How busy the window was, as opposed to what it was worth. */
+export interface ActivityCounts {
+  orders: number;
+  visits: number;
+}
+
 export interface RevenueReport {
+  /** Visits and shop sales over the window, counted the same way as the money. */
+  activity: ActivityCounts;
   days: number;
   points: RevenuePoint[];
   /**
@@ -172,6 +180,7 @@ export interface RevenueReport {
    * history reports zeros, and "no change from zero" is honest.
    */
   previous: RevenueTotals;
+  previousActivity: ActivityCounts;
   topProducts: TopProduct[];
   totals: RevenueTotals;
 }
@@ -399,17 +408,21 @@ export const getRevenueReport = async (
   const from = new Date(to.getTime() - days * MS_PER_DAY);
   const previousFrom = new Date(from.getTime() - days * MS_PER_DAY);
 
-  const [byDay, topProducts] = await Promise.all([
+  const [byDay, topProducts, activity, previousActivity] = await Promise.all([
     loadMoneyBetween(gymId, previousFrom, to),
     loadTopProducts(gymId, from, to),
+    loadActivityBetween(gymId, from, to),
+    loadActivityBetween(gymId, previousFrom, from),
   ]);
 
   const points = pointsFor(byDay, from, to);
 
   return {
+    activity,
     days,
     points,
     previous: summariseRevenue(pointsFor(byDay, previousFrom, from)),
+    previousActivity,
     topProducts,
     totals: summariseRevenue(points),
   };
@@ -481,10 +494,19 @@ export interface DebtorRow {
 }
 
 export interface DashboardSnapshot {
+  /**
+   * Every list here is capped at `ATTENTION_LIMIT`, so its `.length` is a page
+   * size and not an answer. The counts beside them are the real totals, and
+   * they are what the cards count — a badge reading "6" while forty
+   * memberships lapse this week is a number the desk would act on.
+   */
   attention: {
+    debtorCount: number;
     debtors: DebtorRow[];
     expiring: ExpiringMembership[];
+    expiringCount: number;
     lowStock: LowStockRow[];
+    lowStockCount: number;
   };
   cashboxes: CashboxBalances;
   members: MemberStanding;
@@ -549,6 +571,60 @@ const loadTodayActivity = async (
         eq(attendanceSessions.gymId, gymId),
         eq(attendanceSessions.personType, "member"),
         eq(attendanceSessions.workDate, toDayKey(midnight))
+      )
+    );
+
+  const [[ordersRow], [visitsRow]] = await Promise.all([
+    ordersPromise,
+    visitsPromise,
+  ]);
+
+  return {
+    orders: toNumber(ordersRow?.total ?? 0),
+    visits: toNumber(visitsRow?.total ?? 0),
+  };
+};
+
+/**
+ * Visits and shop sales inside an arbitrary window.
+ *
+ * The sibling of `loadTodayActivity`, which stays because the snapshot still
+ * answers "what has happened since midnight" for callers that have no range —
+ * the mobile app among them. This one exists because the dashboard's range now
+ * governs the whole tile row, and a row mixing "this month" with "today" is
+ * two periods side by side with nothing saying so.
+ *
+ * Attendance is filtered on `work_date` rather than a timestamp: it is the
+ * column the day is recorded under, and `toDayKey` gives the same `YYYY-MM-DD`
+ * strings, which compare correctly as text. `to` is exclusive, matching the
+ * money queries.
+ */
+const loadActivityBetween = async (
+  gymId: string,
+  from: Date,
+  to: Date
+): Promise<ActivityCounts> => {
+  const ordersPromise = db
+    .select({ total: sql<string>`COUNT(*)` })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.gymId, gymId),
+        ne(orders.status, "void"),
+        gte(orders.createdAt, from),
+        lt(orders.createdAt, to)
+      )
+    );
+
+  const visitsPromise = db
+    .select({ total: sql<string>`COUNT(*)` })
+    .from(attendanceSessions)
+    .where(
+      and(
+        eq(attendanceSessions.gymId, gymId),
+        eq(attendanceSessions.personType, "member"),
+        gte(attendanceSessions.workDate, toDayKey(from)),
+        lt(attendanceSessions.workDate, toDayKey(to))
       )
     );
 
@@ -636,7 +712,7 @@ export const summariseStanding = (
  */
 const expiringFrom = (
   roster: readonly MemberListItem[]
-): ExpiringMembership[] => {
+): { rows: ExpiringMembership[]; total: number } => {
   const dated: ExpiringMembership[] = [];
   const byVisits: ExpiringMembership[] = [];
 
@@ -672,7 +748,10 @@ const expiringFrom = (
   dated.sort((a, b) => (a.endsAt ?? "").localeCompare(b.endsAt ?? ""));
   byVisits.sort((a, b) => (a.remainingVisits ?? 0) - (b.remainingVisits ?? 0));
 
-  return [...dated, ...byVisits].slice(0, ATTENTION_LIMIT);
+  // Counted before the slice: the card shows six and says how many there are.
+  const ordered = [...dated, ...byVisits];
+
+  return { rows: ordered.slice(0, ATTENTION_LIMIT), total: ordered.length };
 };
 
 const membershipDebtOf = (roster: readonly MemberListItem[]): number => {
@@ -685,10 +764,13 @@ const membershipDebtOf = (roster: readonly MemberListItem[]): number => {
   return total;
 };
 
-/** The largest shop balances, and what they come to across everybody. */
+/**
+ * The largest shop balances, what they come to across everybody, and how many
+ * people are behind them — `count` is the number owing, `total` the money.
+ */
 const shopDebtOf = (
   buyers: readonly MemberOrderSummary[]
-): { debtors: DebtorRow[]; total: number } => {
+): { count: number; debtors: DebtorRow[]; total: number } => {
   let total = 0;
   const owing: DebtorRow[] = [];
 
@@ -710,7 +792,7 @@ const shopDebtOf = (
 
   owing.sort((a, b) => toNumber(b.remaining) - toNumber(a.remaining));
 
-  return { debtors: owing.slice(0, ATTENTION_LIMIT), total };
+  return { count: owing.length, debtors: owing.slice(0, ATTENTION_LIMIT), total };
 };
 
 const stockOf = (
@@ -795,14 +877,18 @@ export const getDashboardSnapshot = async (
   const shop = shopDebtOf(buyers);
   const shelves = stockOf(stock);
   const standing = summariseStanding(roster);
+  const expiring = expiringFrom(roster);
 
   standing.joinedThisMonth = joinedThisMonth;
 
   return {
     attention: {
+      debtorCount: shop.count,
       debtors: shop.debtors,
-      expiring: expiringFrom(roster),
+      expiring: expiring.rows,
+      expiringCount: expiring.total,
       lowStock: shelves.rows,
+      lowStockCount: shelves.low + shelves.out,
     },
     cashboxes: cashboxes.balances,
     members: standing,
